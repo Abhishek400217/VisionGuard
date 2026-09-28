@@ -1,0 +1,54 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v8.0",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v8.0": {
+      "LibVLCSharp/3.10.1": {
+        "runtime": {
+          "lib/net8.0/LibVLCSharp.dll": {
+            "assemblyVersion": "3.10.1.0",
+            "fileVersion": "3.10.1.0"
+          }
+        }
+      },
+      "LibVLCSharp.WPF/3.10.1": {
+        "dependencies": {
+          "LibVLCSharp": "3.10.1"
+        },
+        "runtime": {
+          "lib/net6.0-windows7.0/LibVLCSharp.WPF.dll": {
+            "assemblyVersion": "3.10.1.0",
+            "fileVersion": "3.10.1.0"
+          }
+        }
+      },
+      "VideoLAN.LibVLC.Windows/3.0.24": {}
+    }
+  },
+  "libraries": {
+    "LibVLCSharp/3.10.1": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-6iSrYMk6RU8fyftdXrfR1TW3xpR/WhEmliORuWvAu2N05wECb8k2hykWiU53/1zqx616v/qUlDbJJyqv78MDkQ==",
+      "path": "libvlcsharp/3.10.1",
+      "hashPath": "libvlcsharp.3.10.1.nupkg.sha512"
+    },
+    "LibVLCSharp.WPF/3.10.1": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-aE/yQPT57bYl+xZ7decqS9TtwvWncIFOzyd7yauM4EWTW8XAfjjwp4HPEx/vh9+uE5GpskIM2EtUc7tyyDjoVQ==",
+      "path": "libvlcsharp.wpf/3.10.1",
+      "hashPath": "libvlcsharp.wpf.3.10.1.nupkg.sha512"
+    },
+    "VideoLAN.LibVLC.Windows/3.0.24": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-U8SHuJr8eAC3x4+gEtOJD2heReo0tTWP3v21NunYNTzjmHpVp7qELs8phohqazxHMkaSIN8LufdIpAhldiLL/A==",
+      "path": "videolan.libvlc.windows/3.0.24",
+      "hashPath": "videolan.libvlc.windows.3.0.24.nupkg.sha512"
+    }
+  }
+}

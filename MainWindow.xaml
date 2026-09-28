@@ -1,0 +1,102 @@
+﻿<Window x:Class="CameraViewer.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vlc="clr-namespace:LibVLCSharp.WPF;assembly=LibVLCSharp.WPF"
+        Title="TP-Link Camera Viewer"
+        Width="1100"
+        Height="700"
+        WindowStartupLocation="CenterScreen"
+        Background="#111111">
+
+    <Grid Background="#111111">
+
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="70"/>
+        </Grid.RowDefinitions>
+
+        <!-- CAMERA VIEW -->
+        <Border Grid.Row="0"
+                Margin="10"
+                Background="Black"
+                CornerRadius="8">
+
+            <vlc:VideoView x:Name="VideoView"
+                           HorizontalAlignment="Stretch"
+                           VerticalAlignment="Stretch"/>
+        </Border>
+
+
+        <!-- CONTROL BAR -->
+        <Border Grid.Row="1"
+                Background="#1E1E1E"
+                Padding="15">
+
+            <Grid>
+
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+
+                <!-- CONNECT -->
+                <Button Grid.Column="0"
+                        x:Name="ConnectButton"
+                        Content="Connect"
+                        Width="110"
+                        Height="40"
+                        Margin="0,0,10,0"
+                        Click="ConnectButton_Click"/>
+
+
+                <!-- STOP -->
+                <Button Grid.Column="1"
+                        x:Name="StopButton"
+                        Content="Stop"
+                        Width="100"
+                        Height="40"
+                        Margin="0,0,10,0"
+                        Click="StopButton_Click"/>
+
+
+                <!-- SNAPSHOT -->
+                <Button Grid.Column="2"
+                        x:Name="SnapshotButton"
+                        Content="Snapshot"
+                        Width="110"
+                        Height="40"
+                        Margin="0,0,10,0"
+                        Click="SnapshotButton_Click"/>
+
+
+                <!-- FULL SCREEN -->
+                <Button Grid.Column="3"
+                        x:Name="FullScreenButton"
+                        Content="Full Screen"
+                        Width="110"
+                        Height="40"
+                        Click="FullScreenButton_Click"/>
+
+
+                <!-- STATUS -->
+                <TextBlock Grid.Column="5"
+                           x:Name="StatusText"
+                           Text="● OFFLINE"
+                           Foreground="Gray"
+                           FontSize="16"
+                           FontWeight="Bold"
+                           VerticalAlignment="Center"
+                           Margin="20,0,10,0"/>
+
+            </Grid>
+
+        </Border>
+
+    </Grid>
+
+</Window>
