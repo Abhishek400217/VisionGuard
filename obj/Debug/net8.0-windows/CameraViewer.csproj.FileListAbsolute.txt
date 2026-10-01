@@ -1269,6 +1269,7 @@ C:\Users\User\Desktop\CameraViewer\CameraViewer\obj\Debug\net8.0-windows\CameraV
 C:\Users\User\Desktop\CameraViewer\CameraViewer\obj\Debug\net8.0-windows\CameraViewer.AssemblyInfoInputs.cache
 C:\Users\User\Desktop\CameraViewer\CameraViewer\obj\Debug\net8.0-windows\CameraViewer.AssemblyInfo.cs
 C:\Users\User\Desktop\CameraViewer\CameraViewer\obj\Debug\net8.0-windows\CameraViewer.csproj.CoreCompileInputs.cache
+C:\Users\User\Desktop\CameraViewer\CameraViewer\obj\Debug\net8.0-windows\CameraViewer.sourcelink.json
 C:\Users\User\Desktop\CameraViewer\CameraViewer\obj\Debug\net8.0-windows\CameraVi.2CA509A9.Up2Date
 C:\Users\User\Desktop\CameraViewer\CameraViewer\obj\Debug\net8.0-windows\CameraViewer.dll
 C:\Users\User\Desktop\CameraViewer\CameraViewer\obj\Debug\net8.0-windows\refint\CameraViewer.dll

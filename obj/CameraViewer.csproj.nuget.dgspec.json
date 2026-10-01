@@ -55,6 +55,10 @@
               "target": "Package",
               "version": "[3.10.1, )"
             },
+            "Microsoft.ML.OnnxRuntime": {
+              "target": "Package",
+              "version": "[1.30.0, )"
+            },
             "VideoLAN.LibVLC.Windows": {
               "target": "Package",
               "version": "[3.0.24, )"
