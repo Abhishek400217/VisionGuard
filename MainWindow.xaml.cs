@@ -1,4 +1,6 @@
-﻿using System;
+﻿using CameraViewer.AI;
+using LibVLCSharp.Shared;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -8,7 +10,6 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Windows;
 using System.Windows.Threading;
-using LibVLCSharp.Shared;
 
 namespace CameraViewer
 {
@@ -16,33 +17,23 @@ namespace CameraViewer
     {
         private LibVLC? _libVLC;
         private MediaPlayer? _mediaPlayer;
+        private CameraViewer.AI.LiveDetectionService? _aiService;
+        private LiveDetectionService? _liveDetection;
 
-        // =====================================================
-        // CAMERA RTSP URL
-        // (Credentials are masked in every log line - see MaskSecrets)
-        // =====================================================
 
         private const string RtspUrl =
             "rtsp://admin:admin%40123@192.168.0.60:554/stream1";
 
-
-        // =====================================================
-        // LOGGING / STATE FIELDS
-        // =====================================================
-
         private static readonly object LogLock = new();
 
-        // Matches scheme://anything@  (i.e. the user:password part of a URL)
         private static readonly Regex UrlCredentialsRegex = new(
             @"\b([a-z][a-z0-9+.\-]*)://[^/\s]*@",
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
-        // Matches an Authorization header line (Basic/Digest) in RTSP traces
         private static readonly Regex AuthHeaderRegex = new(
             @"(Authorization\s*:\s*).*",
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
-        // Literal secrets derived from RtspUrl (password in encoded/decoded/base64 forms)
         private static readonly string[] Secrets = BuildSecrets();
 
         private string? _logFilePath;
@@ -50,12 +41,9 @@ namespace CameraViewer
         private volatile bool _isClosing;
         private bool _isCleanedUp;
 
-        // 1 = an RTSP error has been latched and ERROR status must not be overwritten
         private int _errorLatched;
 
-        // Last error line reported by LibVLC's own log (already masked)
         private volatile string? _lastVlcError;
-
 
         public MainWindow()
         {
@@ -69,7 +57,6 @@ namespace CameraViewer
 
             try
             {
-                // Initialize LibVLC
                 Core.Initialize();
 
                 _libVLC = new LibVLC(
@@ -79,20 +66,64 @@ namespace CameraViewer
                     "--live-caching=1000"
                 );
 
-                // LibVLC internal log -> Output window + log file
                 _libVLC.Log += LibVLC_Log;
 
                 _mediaPlayer = new MediaPlayer(_libVLC);
 
                 VideoView.MediaPlayer = _mediaPlayer;
 
+                string modelPath = Path.Combine(
+    AppContext.BaseDirectory,
+    "AI",
+    "yolo26n.onnx"
+);
 
-                // VLC EVENTS
+                _aiService = new CameraViewer.AI.LiveDetectionService(
+                    _libVLC,
+                    RtspUrl,
+                    modelPath
+                );
+
+                _aiService.Diagnostic += message =>
+                {
+                    WriteLog("AI", message);
+                };
+
+                _aiService.DetectionsAvailable += detections =>
+                {
+                    WriteLog("AI", "Persons detected: " + detections.Count);
+                };
+
+                
+
+                string aiRtspUrl = RtspUrl.Replace("/stream1", "/stream2");
+
+                _liveDetection = new LiveDetectionService(
+                    _libVLC,
+                    aiRtspUrl,
+                    modelPath
+                );
+
+                _liveDetection.Diagnostic += message =>
+                {
+                    WriteLog("AI", message);
+                };
+
+                _liveDetection.DetectionsAvailable += detections =>
+                {
+                    if (detections.Count > 0)
+                    {
+                        WriteLog(
+                            "AI",
+                            $"PERSON detected: {detections.Count}"
+                        );
+                    }
+                };
+
                 _mediaPlayer.Playing += MediaPlayer_Playing;
                 _mediaPlayer.Stopped += MediaPlayer_Stopped;
                 _mediaPlayer.EncounteredError += MediaPlayer_EncounteredError;
 
-                // Log-only events (no UI action)
                 _mediaPlayer.Opening += MediaPlayer_Opening;
                 _mediaPlayer.EndReached += MediaPlayer_EndReached;
 
@@ -101,16 +132,11 @@ namespace CameraViewer
             catch (Exception ex)
             {
                 WriteLog("ERR", "Startup failed: " + ex);
-                throw; // same behavior as before: startup failure is not swallowed
+                throw; 
             }
 
             SetStatus("● OFFLINE", "Gray");
         }
-
-
-        // =====================================================
-        // LOGGING
-        // =====================================================
 
         private void InitLogging()
         {
@@ -136,11 +162,6 @@ namespace CameraViewer
             }
         }
 
-
-        /// <summary>
-        /// Thread-safe, never throws. Every message is masked before it is
-        /// written anywhere, so credentials cannot reach the log.
-        /// </summary>
         private void WriteLog(string level, string message)
         {
             try
@@ -150,23 +171,24 @@ namespace CameraViewer
                     " [" + level + "] " +
                     MaskSecrets(message);
 
-                // Visual Studio Output window
                 Trace.WriteLine(line);
 
-                // Log file
                 string? path = _logFilePath;
 
                 if (path != null)
                 {
                     lock (LogLock)
                     {
-                        File.AppendAllText(path, line + Environment.NewLine, Encoding.UTF8);
+                        File.AppendAllText(
+                            path,
+                            line + Environment.NewLine,
+                            Encoding.UTF8
+                        );
                     }
                 }
             }
             catch
             {
-                // Logging must never crash the app
             }
         }
 
@@ -178,13 +200,10 @@ namespace CameraViewer
                 return text ?? string.Empty;
             }
 
-            // 1) scheme://user:pass@host  ->  scheme://***:***@host
             string result = UrlCredentialsRegex.Replace(text, "$1://***:***@");
 
-            // 2) Authorization headers
             result = AuthHeaderRegex.Replace(result, "$1***");
 
-            // 3) Literal password forms (encoded, decoded, base64)
             foreach (string secret in Secrets)
             {
                 result = result.Replace(secret, "***", StringComparison.Ordinal);
@@ -201,7 +220,7 @@ namespace CameraViewer
             try
             {
                 var uri = new Uri(RtspUrl);
-                string info = uri.UserInfo; // still percent-encoded, e.g. admin:admin%40123
+                string info = uri.UserInfo; 
                 int idx = info.IndexOf(':');
 
                 if (idx >= 0)
@@ -218,7 +237,6 @@ namespace CameraViewer
             }
             catch
             {
-                // If parsing fails the regex masking still applies
             }
 
             return list
@@ -227,12 +245,6 @@ namespace CameraViewer
                 .OrderByDescending(s => s.Length)
                 .ToArray();
         }
-
-
-        // =====================================================
-        // LIBVLC INTERNAL LOG
-        // (runs on a LibVLC thread - must be fast and never throw)
-        // =====================================================
 
         private void LibVLC_Log(object? sender, LogEventArgs e)
         {
@@ -270,14 +282,8 @@ namespace CameraViewer
             }
             catch
             {
-                // Never let logging break LibVLC
             }
         }
-
-
-        // =====================================================
-        // UI THREAD HELPER (non-blocking)
-        // =====================================================
 
         private void PostToUi(Action action, string what)
         {
@@ -314,11 +320,6 @@ namespace CameraViewer
             }
         }
 
-
-        // =====================================================
-        // CONNECT
-        // =====================================================
-
         private void ConnectButton_Click(object sender, RoutedEventArgs e)
         {
             ConnectCamera();
@@ -349,6 +350,19 @@ namespace CameraViewer
 
                 bool result = _mediaPlayer!.Play(media);
 
+                if (result)
+                {
+                    try
+                    {
+                        _aiService?.Start();
+                        WriteLog("AI", "AI live detection started.");
+                    }
+                    catch (Exception ex)
+                    {
+                        WriteLog("ERR", "AI startup failed: " + ex);
+                    }
+                }
+
                 if (!result)
                 {
                     SetStatus("● ERROR", "Red");
@@ -365,6 +379,23 @@ namespace CameraViewer
                 else
                 {
                     WriteLog("INF", "Play() accepted - waiting for Playing event");
+
+                    try
+                    {
+                        _liveDetection?.Start();
+
+                        WriteLog(
+                            "AI",
+                            "Live human detection stream started."
+                        );
+                    }
+                    catch (Exception ex)
+                    {
+                        WriteLog(
+                            "ERR",
+                            "AI detection failed to start: " + ex
+                        );
+                    }
                 }
             }
             catch (Exception ex)
@@ -381,26 +412,25 @@ namespace CameraViewer
                 );
             }
         }
-
-
-        // =====================================================
-        // STOP
-        // =====================================================
-
         private void StopButton_Click(object sender, RoutedEventArgs e)
         {
             WriteLog("INF", "Stop requested by user");
             StopCamera();
         }
 
-
         private void StopCamera()
         {
             try
             {
-                // A deliberate stop/reconnect clears any latched error
                 Interlocked.Exchange(ref _errorLatched, 0);
-
+                try
+                {
+                    _aiService?.Stop();
+                }
+                catch (Exception ex)
+                {
+                    WriteLog("WRN", "AI stop failed: " + ex.Message);
+                }
                 if (_mediaPlayer != null &&
                     (_mediaPlayer.IsPlaying || _mediaPlayer.State != VLCState.Stopped))
                 {
@@ -416,18 +446,12 @@ namespace CameraViewer
             }
         }
 
-
-        // =====================================================
-        // VLC PLAYING EVENT (LibVLC thread -> non-blocking UI post)
-        // =====================================================
-
         private void MediaPlayer_Playing(object? sender, EventArgs e)
         {
             WriteLog("INF", "MediaPlayer event: Playing");
 
             PostToUi(() =>
             {
-                // Ignore a late Playing event if an error is latched
                 if (Volatile.Read(ref _errorLatched) == 1)
                 {
                     return;
@@ -437,24 +461,17 @@ namespace CameraViewer
             }, "Playing");
         }
 
-
-        // =====================================================
-        // VLC STOPPED EVENT (LibVLC thread -> non-blocking UI post)
-        // =====================================================
-
         private void MediaPlayer_Stopped(object? sender, EventArgs e)
         {
             WriteLog("INF", "MediaPlayer event: Stopped");
 
             PostToUi(() =>
             {
-                // Keep the ERROR status visible after an error-triggered reset
                 if (Volatile.Read(ref _errorLatched) == 1)
                 {
                     return;
                 }
 
-                // Ignore a stale Stopped event if a new connection is already starting
                 var player = _mediaPlayer;
 
                 if (player != null &&
@@ -469,11 +486,6 @@ namespace CameraViewer
             }, "Stopped");
         }
 
-
-        // =====================================================
-        // VLC LOG-ONLY EVENTS
-        // =====================================================
-
         private void MediaPlayer_Opening(object? sender, EventArgs e)
         {
             WriteLog("INF", "MediaPlayer event: Opening");
@@ -485,16 +497,8 @@ namespace CameraViewer
             WriteLog("WRN", "MediaPlayer event: EndReached");
         }
 
-
-        // =====================================================
-        // VLC ERROR EVENT
-        // Runs on a LibVLC thread: do NOT call Stop() here and do NOT
-        // show dialogs. Hand everything to the UI thread asynchronously.
-        // =====================================================
-
         private void MediaPlayer_EncounteredError(object? sender, EventArgs e)
         {
-            // Only handle the first error until the user stops/reconnects
             if (Interlocked.Exchange(ref _errorLatched, 1) == 1)
             {
                 WriteLog("WRN", "MediaPlayer event: EncounteredError (duplicate, already handled)");
@@ -509,7 +513,6 @@ namespace CameraViewer
 
         private void HandleRtspErrorOnUiThread()
         {
-            // User may have pressed Stop/Connect in the meantime
             if (Volatile.Read(ref _errorLatched) != 1)
             {
                 WriteLog("INF", "RTSP error handling skipped (state already changed by user)");
@@ -547,11 +550,6 @@ namespace CameraViewer
                 WriteLog("WRN", "Player reset after error failed (ignored): " + ex.Message);
             }
         }
-
-
-        // =====================================================
-        // SNAPSHOT
-        // =====================================================
 
         private void SnapshotButton_Click(object sender, RoutedEventArgs e)
         {
@@ -632,11 +630,6 @@ namespace CameraViewer
             }
         }
 
-
-        // =====================================================
-        // FULL SCREEN
-        // =====================================================
-
         private void FullScreenButton_Click(object sender, RoutedEventArgs e)
         {
             if (WindowStyle == WindowStyle.None)
@@ -652,11 +645,6 @@ namespace CameraViewer
                 ResizeMode = ResizeMode.NoResize;
             }
         }
-
-
-        // =====================================================
-        // STATUS HELPER
-        // =====================================================
 
         private void SetStatus(string text, string color)
         {
@@ -685,15 +673,8 @@ namespace CameraViewer
                     break;
             }
         }
-
-
-        // =====================================================
-        // CLEANUP (defensive: every step isolated, runs once)
-        // =====================================================
-
         protected override void OnClosed(EventArgs e)
         {
-            // Stop all async UI posts from touching a closing window
             _isClosing = true;
 
             WriteLog("INF", "Window closing - starting cleanup");
@@ -714,6 +695,9 @@ namespace CameraViewer
         {
             var player = _mediaPlayer;
             var vlc = _libVLC;
+
+            _aiService?.Dispose();
+            _aiService = null;
 
             _mediaPlayer = null;
             _libVLC = null;
@@ -761,8 +745,6 @@ namespace CameraViewer
                 vlc?.Dispose();
             });
         }
-
-
         private void SafeRun(string what, Action action)
         {
             try

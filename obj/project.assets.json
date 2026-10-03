@@ -135,7 +135,7 @@
           "lib/netcoreapp2.1/_._": {}
         }
       },
-      "System.Numerics.Tensors/9.0.0": {
+      "System.Numerics.Tensors/10.0.12": {
         "type": "package",
         "compile": {
           "lib/net8.0/System.Numerics.Tensors.dll": {
@@ -339,21 +339,22 @@
         "version.txt"
       ]
     },
-    "System.Numerics.Tensors/9.0.0": {
-      "sha512": "hyJB4UlpAi19Xr9AXzu2NuagKC4lPfHObNMEAA0HmqFz2rX7wKgzeYzO/jM/eBHDhnUGFFEjk5cOoJaxqg5J4A==",
+    "System.Numerics.Tensors/10.0.12": {
+      "sha512": "17brFrnQHV/XMMazXNqFq4GkvzWy8yzDPo5Gb8TT8zJtMFbUqDycOCyPCp9F+eMc4L75kcCKRZqaeBHMwLCL9Q==",
       "type": "package",
-      "path": "system.numerics.tensors/9.0.0",
+      "path": "system.numerics.tensors/10.0.12",
       "files": [
         ".nupkg.metadata",
         ".signature.p7s",
         "Icon.png",
-        "LICENSE.TXT",
         "PACKAGE.md",
         "THIRD-PARTY-NOTICES.TXT",
         "buildTransitive/net461/System.Numerics.Tensors.targets",
         "buildTransitive/net462/_._",
         "buildTransitive/net8.0/_._",
         "buildTransitive/netcoreapp2.0/System.Numerics.Tensors.targets",
+        "lib/net10.0/System.Numerics.Tensors.dll",
+        "lib/net10.0/System.Numerics.Tensors.xml",
         "lib/net462/System.Numerics.Tensors.dll",
         "lib/net462/System.Numerics.Tensors.xml",
         "lib/net8.0/System.Numerics.Tensors.dll",
@@ -362,7 +363,7 @@
         "lib/net9.0/System.Numerics.Tensors.xml",
         "lib/netstandard2.0/System.Numerics.Tensors.dll",
         "lib/netstandard2.0/System.Numerics.Tensors.xml",
-        "system.numerics.tensors.9.0.0.nupkg.sha512",
+        "system.numerics.tensors.10.0.12.nupkg.sha512",
         "system.numerics.tensors.nuspec",
         "useSharedDesignerContext.txt"
       ]
@@ -1938,6 +1939,7 @@
     "net8.0-windows7.0": [
       "LibVLCSharp.WPF >= 3.10.1",
       "Microsoft.ML.OnnxRuntime >= 1.30.0",
+      "System.Numerics.Tensors >= 10.0.12",
       "VideoLAN.LibVLC.Windows >= 3.0.24"
     ]
   },
@@ -1999,6 +2001,10 @@
           "Microsoft.ML.OnnxRuntime": {
             "target": "Package",
             "version": "[1.30.0, )"
+          },
+          "System.Numerics.Tensors": {
+            "target": "Package",
+            "version": "[10.0.12, )"
           },
           "VideoLAN.LibVLC.Windows": {
             "target": "Package",

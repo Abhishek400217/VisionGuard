@@ -8,6 +8,7 @@
 // </auto-generated>
 //------------------------------------------------------------------------------
 
+[assembly: System.Windows.Resources.AssemblyAssociatedContentFileAttribute("ai/yolo26n.onnx")]
 [assembly: System.Windows.Resources.AssemblyAssociatedContentFileAttribute("libvlc.dll")]
 [assembly: System.Windows.Resources.AssemblyAssociatedContentFileAttribute("libvlc.lib")]
 [assembly: System.Windows.Resources.AssemblyAssociatedContentFileAttribute("libvlccore.dll")]

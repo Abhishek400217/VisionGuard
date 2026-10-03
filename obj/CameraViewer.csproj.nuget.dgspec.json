@@ -59,6 +59,10 @@
               "target": "Package",
               "version": "[1.30.0, )"
             },
+            "System.Numerics.Tensors": {
+              "target": "Package",
+              "version": "[10.0.12, )"
+            },
             "VideoLAN.LibVLC.Windows": {
               "target": "Package",
               "version": "[3.0.24, )"
