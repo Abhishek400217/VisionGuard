@@ -82,7 +82,7 @@
                         Height="40"
                         Click="FullScreenButton_Click"/>
 
-
+  
                 <!-- STATUS -->
                 <TextBlock Grid.Column="5"
                            x:Name="StatusText"

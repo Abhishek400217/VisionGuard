@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Threading;
 using System.Threading.Tasks;
 using LibVLCSharp.Shared;
 using Microsoft.ML.OnnxRuntime;
@@ -17,10 +18,6 @@ public sealed record Detection(
     float Confidence,
     int ClassId);
 
-/// <summary>
-/// Live RTSP -> LibVLC decoded frame -> YOLO26 ONNX pipeline.
-/// This is a SECOND, headless player. The existing VideoView player is untouched.
-/// </summary>
 public sealed class LiveDetectionService : IDisposable
 {
     private readonly LibVLC _libVlc;
@@ -30,21 +27,29 @@ public sealed class LiveDetectionService : IDisposable
 
     private const int InputSize = 640;
 
-    // TP-Link sub-stream is expected to be 640x360.
-    // If your camera reports another stream2 resolution, we will make this dynamic
-    // in the next step instead of changing the display pipeline.
     private const int FrameWidth = 640;
     private const int FrameHeight = 360;
     private const int BytesPerPixel = 4;
     private const int Pitch = FrameWidth * BytesPerPixel;
     private const int BufferSize = Pitch * FrameHeight;
 
+    private const float ConfidenceThreshold = 0.35f;
+    private const float NmsThreshold = 0.45f;
+
     private IntPtr _frameBuffer = IntPtr.Zero;
+
     private readonly object _frameLock = new();
+
     private long _lastInferenceMs;
+
+    private int _inferenceRunning;
+
+    private long _frameCount;
+
     private bool _disposed;
 
     public event Action<IReadOnlyList<Detection>>? DetectionsAvailable;
+
     public event Action<string>? Diagnostic;
 
     public LiveDetectionService(
@@ -53,7 +58,13 @@ public sealed class LiveDetectionService : IDisposable
         string modelPath)
     {
         _libVlc = libVlc ?? throw new ArgumentNullException(nameof(libVlc));
+
         _rtspUrl = rtspUrl ?? throw new ArgumentNullException(nameof(rtspUrl));
+
+        if (string.IsNullOrWhiteSpace(modelPath))
+            throw new ArgumentException(
+                "Model path is empty.",
+                nameof(modelPath));
 
         _session = new InferenceSession(modelPath);
 
@@ -61,7 +72,6 @@ public sealed class LiveDetectionService : IDisposable
 
         _player = new MediaPlayer(_libVlc);
 
-        // Force a predictable BGRA/RV32 frame format for the AI pipeline.
         _player.SetVideoFormat(
             "RV32",
             FrameWidth,
@@ -72,6 +82,12 @@ public sealed class LiveDetectionService : IDisposable
             VideoLock,
             null,
             VideoDisplay);
+
+        Diagnostic?.Invoke(
+            "AI model loaded: " + modelPath);
+
+        Diagnostic?.Invoke(
+            "AI input: 640x640, camera frame: 640x360");
     }
 
     public void Start()
@@ -89,13 +105,19 @@ public sealed class LiveDetectionService : IDisposable
         media.AddOption(":live-caching=500");
         media.AddOption(":no-audio");
 
-        if (!_player.Play(media))
+        Diagnostic?.Invoke(
+            "AI connecting to stream2...");
+
+        bool result = _player.Play(media);
+
+        if (!result)
         {
             throw new InvalidOperationException(
                 "AI RTSP stream could not be started.");
         }
 
-        Diagnostic?.Invoke("AI live stream started.");
+        Diagnostic?.Invoke(
+            "AI live stream started.");
     }
 
     public void Stop()
@@ -105,8 +127,10 @@ public sealed class LiveDetectionService : IDisposable
 
         try
         {
-            if (_player.IsPlaying)
+            if (_player.State != VLCState.Stopped)
+            {
                 _player.Stop();
+            }
         }
         catch (Exception ex)
         {
@@ -119,8 +143,13 @@ public sealed class LiveDetectionService : IDisposable
         IntPtr opaque,
         IntPtr planes)
     {
-        // LibVLC asks us where it should decode the next frame.
-        Marshal.WriteIntPtr(planes, _frameBuffer);
+        if (_frameBuffer == IntPtr.Zero)
+            return IntPtr.Zero;
+
+        Marshal.WriteIntPtr(
+            planes,
+            _frameBuffer);
+
         return _frameBuffer;
     }
 
@@ -130,7 +159,12 @@ public sealed class LiveDetectionService : IDisposable
     {
         try
         {
-            // Copy decoded native pixels before LibVLC reuses the buffer.
+            if (_disposed)
+                return;
+
+            long frameNumber =
+                Interlocked.Increment(ref _frameCount);
+
             var frame = new byte[BufferSize];
 
             lock (_frameLock)
@@ -142,7 +176,18 @@ public sealed class LiveDetectionService : IDisposable
                     BufferSize);
             }
 
-            // Cap inference at about 10 FPS so the live display is not blocked.
+            if (frameNumber == 1)
+            {
+                Diagnostic?.Invoke(
+                    "AI FIRST FRAME RECEIVED.");
+            }
+
+            if (frameNumber % 100 == 0)
+            {
+                Diagnostic?.Invoke(
+                    "AI frames received: " + frameNumber);
+            }
+
             long now = Environment.TickCount64;
 
             if (now - _lastInferenceMs < 100)
@@ -150,12 +195,33 @@ public sealed class LiveDetectionService : IDisposable
 
             _lastInferenceMs = now;
 
-            _ = Task.Run(() => RunInference(frame));
+            if (Interlocked.CompareExchange(
+                    ref _inferenceRunning,
+                    1,
+                    0) != 0)
+            {
+                return;
+            }
+
+            _ = Task.Run(() =>
+            {
+                try
+                {
+                    RunInference(frame);
+                }
+                finally
+                {
+                    Interlocked.Exchange(
+                        ref _inferenceRunning,
+                        0);
+                }
+            });
         }
         catch (Exception ex)
         {
             Diagnostic?.Invoke(
-                "AI frame callback error: " + ex.Message);
+                "AI frame callback error: " +
+                ex.Message);
         }
     }
 
@@ -166,7 +232,6 @@ public sealed class LiveDetectionService : IDisposable
             var tensor = new DenseTensor<float>(
                 new[] { 1, 3, InputSize, InputSize });
 
-            // Fill 640x640 with gray padding.
             float padValue = 114f / 255f;
 
             for (int y = 0; y < InputSize; y++)
@@ -179,21 +244,28 @@ public sealed class LiveDetectionService : IDisposable
                 }
             }
 
-            // 640x360 -> 640x640 letterbox.
             const int padY = 140;
 
             for (int y = 0; y < FrameHeight; y++)
             {
                 int sourceRow = y * Pitch;
+
                 int targetY = y + padY;
 
                 for (int x = 0; x < FrameWidth; x++)
                 {
-                    int p = sourceRow + x * 4;
+                    int p =
+                        sourceRow +
+                        x * 4;
 
-                    float b = bgra[p] / 255f;
-                    float g = bgra[p + 1] / 255f;
-                    float r = bgra[p + 2] / 255f;
+                    float b =
+                        bgra[p] / 255f;
+
+                    float g =
+                        bgra[p + 1] / 255f;
+
+                    float r =
+                        bgra[p + 2] / 255f;
 
                     tensor[0, 0, targetY, x] = r;
                     tensor[0, 1, targetY, x] = g;
@@ -204,91 +276,401 @@ public sealed class LiveDetectionService : IDisposable
             string inputName =
                 _session.InputMetadata.Keys.First();
 
-            using var results = _session.Run(
-                new[]
-                {
-                    NamedOnnxValue.CreateFromTensor(
-                        inputName,
-                        tensor)
-                });
+            using var results =
+                _session.Run(
+                    new[]
+                    {
+                        NamedOnnxValue.CreateFromTensor(
+                            inputName,
+                            tensor)
+                    });
 
-            var detections = ParseOutput(results);
+            var output =
+                results.FirstOrDefault();
 
-            // COCO "person" = class 0.
-            var people = detections
-                .Where(d =>
-                    d.ClassId == 0 &&
-                    d.Confidence >= 0.45f)
-                .ToList();
+            if (output == null)
+            {
+                Diagnostic?.Invoke(
+                    "YOLO ERROR: no output tensor.");
 
-            DetectionsAvailable?.Invoke(people);
+                return;
+            }
+
+            var outputTensor =
+                output.AsTensor<float>();
+
+            int[] dims =
+                outputTensor.Dimensions.ToArray();
+
+            string shape =
+                "[" +
+                string.Join(",", dims) +
+                "]";
+
+            if (Interlocked.Read(ref _frameCount) % 100 < 2)
+            {
+                Diagnostic?.Invoke(
+                    "YOLO output shape: " + shape);
+            }
+
+            List<Detection> detections;
+
+            /*
+             * YOLO26 NMS-free output:
+             *
+             * [1, 300, 6]
+             *
+             * x1,y1,x2,y2,confidence,class
+             */
+            if (dims.Length == 3 &&
+                dims[0] == 1 &&
+                dims[2] == 6)
+            {
+                detections =
+                    ParseEndToEndOutput(
+                        outputTensor,
+                        dims);
+            }
+
+            /*
+             * Normal YOLO26 ONNX output:
+             *
+             * [1, 84, 8400]
+             *
+             * 4 box values + 80 COCO classes.
+             */
+            else if (dims.Length == 3 &&
+                     dims[0] == 1 &&
+                     dims[1] >= 5)
+            {
+                detections =
+                    ParseRawOutput(
+                        outputTensor,
+                        dims);
+            }
+            else
+            {
+                Diagnostic?.Invoke(
+                    "YOLO ERROR: unsupported output shape " +
+                    shape);
+
+                return;
+            }
+
+            var people =
+                detections
+                    .Where(d =>
+                        d.ClassId == 0 &&
+                        d.Confidence >=
+                        ConfidenceThreshold)
+                    .ToList();
+
+            if (people.Count > 0)
+            {
+                Diagnostic?.Invoke(
+                    "PERSON DETECTED: " +
+                    people.Count +
+                    " | confidence=" +
+                    people.Max(x =>
+                        x.Confidence).ToString("0.00"));
+            }
+
+            DetectionsAvailable?.Invoke(
+                people);
         }
         catch (Exception ex)
         {
             Diagnostic?.Invoke(
-                "YOLO inference error: " + ex.Message);
+                "YOLO inference error: " +
+                ex);
         }
     }
 
-    private static List<Detection> ParseOutput(
-        IDisposableReadOnlyCollection<DisposableNamedOnnxValue> results)
+    private static List<Detection>
+        ParseEndToEndOutput(
+            Tensor<float> tensor,
+            int[] dims)
     {
-        var output = results.FirstOrDefault();
+        int count = dims[1];
 
-        if (output == null)
-            return new List<Detection>();
-
-        var tensor = output.AsTensor<float>();
-        int[] dims = tensor.Dimensions.ToArray();
-
-        // YOLO26 end-to-end ONNX export:
-        // [1, N, 6] => x1,y1,x2,y2,confidence,class_id
-        if (dims.Length != 3 || dims[^1] < 6)
-        {
-            throw new InvalidOperationException(
-                "Unexpected YOLO output shape: [" +
-                string.Join(",", dims) + "]");
-        }
-
-        int count = dims[^2];
-        var detections = new List<Detection>(count);
+        var detections =
+            new List<Detection>();
 
         for (int i = 0; i < count; i++)
         {
-            float x1 = tensor[0, i, 0];
-            float y1 = tensor[0, i, 1];
-            float x2 = tensor[0, i, 2];
-            float y2 = tensor[0, i, 3];
-            float confidence = tensor[0, i, 4];
-            int classId = (int)tensor[0, i, 5];
+            float x1 =
+                tensor[0, i, 0];
 
-            // Undo 640x640 -> 640x360 letterbox.
-            y1 -= 140f;
-            y2 -= 140f;
+            float y1 =
+                tensor[0, i, 1];
 
-            x1 = Math.Clamp(x1, 0, FrameWidth);
-            x2 = Math.Clamp(x2, 0, FrameWidth);
-            y1 = Math.Clamp(y1, 0, FrameHeight);
-            y2 = Math.Clamp(y2, 0, FrameHeight);
+            float x2 =
+                tensor[0, i, 2];
+
+            float y2 =
+                tensor[0, i, 3];
+
+            float confidence =
+                tensor[0, i, 4];
+
+            int classId =
+                (int)tensor[0, i, 5];
+
+            if (confidence <
+                ConfidenceThreshold)
+            {
+                continue;
+            }
+
+            NormalizeBox(
+                ref x1,
+                ref y1,
+                ref x2,
+                ref y2);
 
             detections.Add(
                 new Detection(
-                    x1 / FrameWidth,
-                    y1 / FrameHeight,
-                    x2 / FrameWidth,
-                    y2 / FrameHeight,
+                    x1,
+                    y1,
+                    x2,
+                    y2,
                     confidence,
                     classId));
         }
 
-        return detections;
+        return ApplyNms(
+            detections);
+    }
+
+    private static List<Detection>
+        ParseRawOutput(
+            Tensor<float> tensor,
+            int[] dims)
+    {
+        int channels = dims[1];
+
+        int count = dims[2];
+
+        int classCount =
+            channels - 4;
+
+        var detections =
+            new List<Detection>();
+
+        for (int i = 0; i < count; i++)
+        {
+            float cx =
+                tensor[0, 0, i];
+
+            float cy =
+                tensor[0, 1, i];
+
+            float width =
+                tensor[0, 2, i];
+
+            float height =
+                tensor[0, 3, i];
+
+            float bestConfidence =
+                0f;
+
+            int bestClass =
+                -1;
+
+            for (int c = 0;
+                 c < classCount;
+                 c++)
+            {
+                float confidence =
+                    tensor[0, 4 + c, i];
+
+                if (confidence >
+                    bestConfidence)
+                {
+                    bestConfidence =
+                        confidence;
+
+                    bestClass = c;
+                }
+            }
+
+            if (bestClass < 0 ||
+                bestConfidence <
+                ConfidenceThreshold)
+            {
+                continue;
+            }
+
+            float x1 =
+                cx - width / 2f;
+
+            float y1 =
+                cy - height / 2f;
+
+            float x2 =
+                cx + width / 2f;
+
+            float y2 =
+                cy + height / 2f;
+
+            NormalizeBox(
+                ref x1,
+                ref y1,
+                ref x2,
+                ref y2);
+
+            detections.Add(
+                new Detection(
+                    x1,
+                    y1,
+                    x2,
+                    y2,
+                    bestConfidence,
+                    bestClass));
+        }
+
+        return ApplyNms(
+            detections);
+    }
+
+    private static void NormalizeBox(
+        ref float x1,
+        ref float y1,
+        ref float x2,
+        ref float y2)
+    {
+        /*
+         * Camera frame:
+         * 640 x 360
+         *
+         * YOLO input:
+         * 640 x 640
+         *
+         * Therefore:
+         * top padding = 140 pixels.
+         */
+
+        y1 -= 140f;
+        y2 -= 140f;
+
+        x1 =
+            Math.Clamp(
+                x1,
+                0,
+                FrameWidth);
+
+        x2 =
+            Math.Clamp(
+                x2,
+                0,
+                FrameWidth);
+
+        y1 =
+            Math.Clamp(
+                y1,
+                0,
+                FrameHeight);
+
+        y2 =
+            Math.Clamp(
+                y2,
+                0,
+                FrameHeight);
+    }
+
+    private static List<Detection>
+        ApplyNms(
+            List<Detection> detections)
+    {
+        var result =
+            new List<Detection>();
+
+        var ordered =
+            detections
+                .OrderByDescending(
+                    x => x.Confidence)
+                .ToList();
+
+        while (ordered.Count > 0)
+        {
+            var best =
+                ordered[0];
+
+            result.Add(best);
+
+            ordered.RemoveAt(0);
+
+            ordered.RemoveAll(
+                other =>
+                    other.ClassId ==
+                    best.ClassId &&
+                    IoU(best, other) >
+                    NmsThreshold);
+        }
+
+        return result;
+    }
+
+    private static float IoU(
+        Detection a,
+        Detection b)
+    {
+        float x1 =
+            Math.Max(a.X1, b.X1);
+
+        float y1 =
+            Math.Max(a.Y1, b.Y1);
+
+        float x2 =
+            Math.Min(a.X2, b.X2);
+
+        float y2 =
+            Math.Min(a.Y2, b.Y2);
+
+        float intersectionWidth =
+            Math.Max(0, x2 - x1);
+
+        float intersectionHeight =
+            Math.Max(0, y2 - y1);
+
+        float intersection =
+            intersectionWidth *
+            intersectionHeight;
+
+        float areaA =
+            Math.Max(
+                0,
+                a.X2 - a.X1) *
+            Math.Max(
+                0,
+                a.Y2 - a.Y1);
+
+        float areaB =
+            Math.Max(
+                0,
+                b.X2 - b.X1) *
+            Math.Max(
+                0,
+                b.Y2 - b.Y1);
+
+        float union =
+            areaA +
+            areaB -
+            intersection;
+
+        if (union <= 0)
+            return 0;
+
+        return intersection / union;
     }
 
     private void ThrowIfDisposed()
     {
         if (_disposed)
+        {
             throw new ObjectDisposedException(
                 nameof(LiveDetectionService));
+        }
     }
 
     public void Dispose()
@@ -306,13 +688,29 @@ public sealed class LiveDetectionService : IDisposable
         {
         }
 
-        _player.Dispose();
-        _session.Dispose();
+        try
+        {
+            _player.Dispose();
+        }
+        catch
+        {
+        }
+
+        try
+        {
+            _session.Dispose();
+        }
+        catch
+        {
+        }
 
         if (_frameBuffer != IntPtr.Zero)
         {
-            Marshal.FreeHGlobal(_frameBuffer);
-            _frameBuffer = IntPtr.Zero;
+            Marshal.FreeHGlobal(
+                _frameBuffer);
+
+            _frameBuffer =
+                IntPtr.Zero;
         }
     }
 }

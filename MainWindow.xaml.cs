@@ -17,7 +17,6 @@ namespace CameraViewer
     {
         private LibVLC? _libVLC;
         private MediaPlayer? _mediaPlayer;
-        private CameraViewer.AI.LiveDetectionService? _aiService;
         private LiveDetectionService? _liveDetection;
 
 
@@ -78,21 +77,7 @@ namespace CameraViewer
     "yolo26n.onnx"
 );
 
-                _aiService = new CameraViewer.AI.LiveDetectionService(
-                    _libVLC,
-                    RtspUrl,
-                    modelPath
-                );
-
-                _aiService.Diagnostic += message =>
-                {
-                    WriteLog("AI", message);
-                };
-
-                _aiService.DetectionsAvailable += detections =>
-                {
-                    WriteLog("AI", "Persons detected: " + detections.Count);
-                };
+                
 
                 
 
@@ -330,86 +315,77 @@ namespace CameraViewer
         {
             try
             {
-                WriteLog("INF", "Connect requested: " + MaskSecrets(RtspUrl));
+                WriteLog(
+                    "INF",
+                    "Connect requested: " +
+                    MaskSecrets(RtspUrl));
 
                 StopCamera();
 
-                SetStatus("● CONNECTING...", "Orange");
+                SetStatus(
+                    "● CONNECTING...",
+                    "Orange");
 
+                using var media =
+                    new Media(
+                        _libVLC!,
+                        new Uri(RtspUrl));
 
-                using var media = new Media(
-                    _libVLC!,
-                    new Uri(RtspUrl)
-                );
+                media.AddOption(
+                    ":rtsp-tcp");
 
+                media.AddOption(
+                    ":network-caching=1000");
 
-                media.AddOption(":rtsp-tcp");
-                media.AddOption(":network-caching=1000");
-                media.AddOption(":live-caching=1000");
+                media.AddOption(
+                    ":live-caching=1000");
 
-
-                bool result = _mediaPlayer!.Play(media);
-
-                if (result)
-                {
-                    try
-                    {
-                        _aiService?.Start();
-                        WriteLog("AI", "AI live detection started.");
-                    }
-                    catch (Exception ex)
-                    {
-                        WriteLog("ERR", "AI startup failed: " + ex);
-                    }
-                }
+                bool result =
+                    _mediaPlayer!.Play(media);
 
                 if (!result)
                 {
-                    SetStatus("● ERROR", "Red");
+                    SetStatus(
+                        "● ERROR",
+                        "Red");
 
-                    WriteLog("ERR", "Play() returned false - LibVLC could not start the RTSP stream");
+                    WriteLog(
+                        "ERR",
+                        "Main camera Play() returned false.");
 
-                    MessageBox.Show(
-                        "LibVLC could not start the RTSP stream.",
-                        "RTSP Error",
-                        MessageBoxButton.OK,
-                        MessageBoxImage.Error
-                    );
+                    return;
                 }
-                else
+
+                WriteLog(
+                    "INF",
+                    "Main camera Play() accepted.");
+
+                try
                 {
-                    WriteLog("INF", "Play() accepted - waiting for Playing event");
+                    _liveDetection?.Start();
 
-                    try
-                    {
-                        _liveDetection?.Start();
-
-                        WriteLog(
-                            "AI",
-                            "Live human detection stream started."
-                        );
-                    }
-                    catch (Exception ex)
-                    {
-                        WriteLog(
-                            "ERR",
-                            "AI detection failed to start: " + ex
-                        );
-                    }
+                    WriteLog(
+                        "AI",
+                        "AI detection stream started.");
+                }
+                catch (Exception ex)
+                {
+                    WriteLog(
+                        "ERR",
+                        "AI detection start failed: " +
+                        ex);
                 }
             }
             catch (Exception ex)
             {
-                SetStatus("● ERROR", "Red");
+                SetStatus(
+                    "● ERROR",
+                    "Red");
 
-                WriteLog("ERR", "Camera connection failed: " + ex);
-
-                MessageBox.Show(
-                    "Camera connection failed.\n\n" + ex.Message,
-                    "Camera Error",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Error
-                );
+                WriteLog(
+                    "ERR",
+                    "Camera connection failed: " +
+                    ex);
             }
         }
         private void StopButton_Click(object sender, RoutedEventArgs e)
@@ -422,27 +398,47 @@ namespace CameraViewer
         {
             try
             {
-                Interlocked.Exchange(ref _errorLatched, 0);
+                Interlocked.Exchange(
+                    ref _errorLatched,
+                    0);
+
                 try
                 {
-                    _aiService?.Stop();
+                    _liveDetection?.Stop();
+
+                    WriteLog(
+                        "AI",
+                        "AI detection stream stopped.");
                 }
                 catch (Exception ex)
                 {
-                    WriteLog("WRN", "AI stop failed: " + ex.Message);
+                    WriteLog(
+                        "WRN",
+                        "AI stop failed: " +
+                        ex.Message);
                 }
+
                 if (_mediaPlayer != null &&
-                    (_mediaPlayer.IsPlaying || _mediaPlayer.State != VLCState.Stopped))
+                    (_mediaPlayer.IsPlaying ||
+                     _mediaPlayer.State != VLCState.Stopped))
                 {
                     _mediaPlayer.Stop();
                 }
 
-                SetStatus("● OFFLINE", "Gray");
+                SetStatus(
+                    "● OFFLINE",
+                    "Gray");
             }
             catch (Exception ex)
             {
-                WriteLog("WRN", "StopCamera error (ignored): " + ex.Message);
-                SetStatus("● OFFLINE", "Gray");
+                WriteLog(
+                    "WRN",
+                    "StopCamera error (ignored): " +
+                    ex.Message);
+
+                SetStatus(
+                    "● OFFLINE",
+                    "Gray");
             }
         }
 
@@ -696,8 +692,8 @@ namespace CameraViewer
             var player = _mediaPlayer;
             var vlc = _libVLC;
 
-            _aiService?.Dispose();
-            _aiService = null;
+            _liveDetection?.Dispose();
+            _liveDetection = null;
 
             _mediaPlayer = null;
             _libVLC = null;

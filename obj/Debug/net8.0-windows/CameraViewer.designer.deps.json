@@ -110,7 +110,7 @@
       "Microsoft.ML.OnnxRuntime.Managed/1.30.0": {
         "dependencies": {
           "System.Memory": "4.5.5",
-          "System.Numerics.Tensors": "9.0.0"
+          "System.Numerics.Tensors": "10.0.12"
         },
         "runtime": {
           "lib/net8.0/Microsoft.ML.OnnxRuntime.dll": {
@@ -120,11 +120,11 @@
         }
       },
       "System.Memory/4.5.5": {},
-      "System.Numerics.Tensors/9.0.0": {
+      "System.Numerics.Tensors/10.0.12": {
         "runtime": {
           "lib/net8.0/System.Numerics.Tensors.dll": {
-            "assemblyVersion": "9.0.0.0",
-            "fileVersion": "9.0.24.52809"
+            "assemblyVersion": "10.0.0.12",
+            "fileVersion": "10.0.1226.42308"
           }
         }
       },
@@ -167,12 +167,12 @@
       "path": "system.memory/4.5.5",
       "hashPath": "system.memory.4.5.5.nupkg.sha512"
     },
-    "System.Numerics.Tensors/9.0.0": {
+    "System.Numerics.Tensors/10.0.12": {
       "type": "package",
       "serviceable": true,
-      "sha512": "sha512-hyJB4UlpAi19Xr9AXzu2NuagKC4lPfHObNMEAA0HmqFz2rX7wKgzeYzO/jM/eBHDhnUGFFEjk5cOoJaxqg5J4A==",
-      "path": "system.numerics.tensors/9.0.0",
-      "hashPath": "system.numerics.tensors.9.0.0.nupkg.sha512"
+      "sha512": "sha512-17brFrnQHV/XMMazXNqFq4GkvzWy8yzDPo5Gb8TT8zJtMFbUqDycOCyPCp9F+eMc4L75kcCKRZqaeBHMwLCL9Q==",
+      "path": "system.numerics.tensors/10.0.12",
+      "hashPath": "system.numerics.tensors.10.0.12.nupkg.sha512"
     },
     "VideoLAN.LibVLC.Windows/3.0.24": {
       "type": "package",
