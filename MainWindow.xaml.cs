@@ -9,15 +9,17 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Media;
 using System.Windows.Threading;
-
 namespace CameraViewer
 {
     public partial class MainWindow : Window
     {
         private LibVLC? _libVLC;
-        private MediaPlayer? _mediaPlayer;
-        private LiveDetectionService? _liveDetection;
+        private LibVLCSharp.Shared.MediaPlayer? _mediaPlayer; private LiveDetectionService? _liveDetection;
+
+        private DetectionOverlayWindow? _detectionOverlay;
 
 
         private const string RtspUrl =
@@ -48,6 +50,12 @@ namespace CameraViewer
         {
             InitializeComponent();
 
+            _detectionOverlay = new DetectionOverlayWindow();
+
+            Loaded += MainWindow_Loaded;
+            LocationChanged += MainWindow_LocationChanged;
+            SizeChanged += MainWindow_SizeChanged;
+
             InitLogging();
 
             WriteLog("INF", "=== CameraViewer starting ===");
@@ -67,7 +75,7 @@ namespace CameraViewer
 
                 _libVLC.Log += LibVLC_Log;
 
-                _mediaPlayer = new MediaPlayer(_libVLC);
+                _mediaPlayer = new LibVLCSharp.Shared.MediaPlayer(_libVLC);
 
                 VideoView.MediaPlayer = _mediaPlayer;
 
@@ -96,13 +104,21 @@ namespace CameraViewer
 
                 _liveDetection.DetectionsAvailable += detections =>
                 {
-                    if (detections.Count > 0)
+                    int personCount = detections.Count;
+
+                    Dispatcher.BeginInvoke(() =>
                     {
-                        WriteLog(
-                            "AI",
-                            $"PERSON detected: {detections.Count}"
-                        );
-                    }
+                        if (personCount > 0)
+                        {
+                            StatusText.Text = $"● LIVE | PERSONS: {personCount}";
+                            StatusText.Foreground = Brushes.LimeGreen;
+                        }
+                        else
+                        {
+                            StatusText.Text = "● LIVE | PERSONS: 0";
+                            StatusText.Foreground = Brushes.Gray;
+                        }
+                    });
                 };
 
                 _mediaPlayer.Playing += MediaPlayer_Playing;
@@ -121,6 +137,63 @@ namespace CameraViewer
             }
 
             SetStatus("● OFFLINE", "Gray");
+        }
+        
+        private void MainWindow_Loaded(object sender, RoutedEventArgs e)
+        {
+            PositionDetectionOverlay();
+
+            _detectionOverlay?.Show();
+            PositionDetectionOverlay();
+        }
+
+        private void MainWindow_LocationChanged(
+            object? sender,
+            EventArgs e)
+        {
+            PositionDetectionOverlay();
+        }
+
+        private void MainWindow_SizeChanged(
+            object sender,
+            SizeChangedEventArgs e)
+        {
+            PositionDetectionOverlay();
+        }
+
+        private void PositionDetectionOverlay()
+        {
+            if (_detectionOverlay == null)
+                return;
+
+            if (!IsLoaded)
+                return;
+
+            try
+            {
+                Point topLeft =
+                    VideoView.PointToScreen(
+                        new Point(0, 0));
+
+                Point bottomRight =
+                    VideoView.PointToScreen(
+                        new Point(
+                            VideoView.ActualWidth,
+                            VideoView.ActualHeight));
+
+                _detectionOverlay.Left = topLeft.X;
+                _detectionOverlay.Top = topLeft.Y;
+
+                _detectionOverlay.Width =
+                    bottomRight.X - topLeft.X;
+
+                _detectionOverlay.Height =
+                    bottomRight.Y - topLeft.Y;
+            }
+            catch
+            {
+                // Ignore temporary positioning errors.
+            }
         }
 
         private void InitLogging()
@@ -424,7 +497,7 @@ namespace CameraViewer
                 {
                     _mediaPlayer.Stop();
                 }
-
+                _detectionOverlay?.ClearDetections();
                 SetStatus(
                     "● OFFLINE",
                     "Gray");

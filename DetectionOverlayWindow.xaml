@@ -1,0 +1,16 @@
+﻿<Window x:Class="CameraViewer.DetectionOverlayWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ShowInTaskbar="False"
+        ShowActivated="False"
+        Topmost="True"
+        IsHitTestVisible="False"
+        ResizeMode="NoResize">
+
+    <Canvas x:Name="OverlayCanvas"
+            Background="Transparent"
+            IsHitTestVisible="False"/>
+</Window>

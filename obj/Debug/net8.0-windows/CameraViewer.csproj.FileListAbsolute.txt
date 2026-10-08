@@ -1294,3 +1294,5 @@ C:\Users\User\Desktop\CameraViewer\CameraViewer\obj\Debug\net8.0-windows\refint\
 C:\Users\User\Desktop\CameraViewer\CameraViewer\obj\Debug\net8.0-windows\CameraViewer.pdb
 C:\Users\User\Desktop\CameraViewer\CameraViewer\obj\Debug\net8.0-windows\CameraViewer.genruntimeconfig.cache
 C:\Users\User\Desktop\CameraViewer\CameraViewer\obj\Debug\net8.0-windows\ref\CameraViewer.dll
+C:\Users\User\Desktop\CameraViewer\CameraViewer\obj\Debug\net8.0-windows\DetectionOverlayWindow.baml
+C:\Users\User\Desktop\CameraViewer\CameraViewer\obj\Debug\net8.0-windows\DetectionOverlayWindow.g.cs
