@@ -1,217 +1,122 @@
-# VisionGuard — Intelligent Camera Human Detection
+# 🛡️ VisionGuard — AI Camera Intelligence
 
 <p align="center">
-  <img src="https://readme-typing-svg.demolab.com?font=JetBrains+Mono&weight=700&size=26&duration=2800&pause=900&color=00D4FF&center=true&vCenter=true&width=650&lines=VisionGuard;Real-Time+Camera+Monitoring;AI-Powered+Human+Detection" alt="VisionGuard animated heading" />
+  <img src="https://capsule-render.vercel.app/api?type=waving&color=0:00E5FF,50:615CFF,100:00FFB2&height=170&section=header&text=VISIONGUARD&fontSize=42&fontColor=ffffff&animation=twinkling&fontAlignY=38&desc=SEE%20BEYOND%20THE%20FRAME&descAlignY=60&descSize=16" width="100%" alt="Animated VisionGuard header"/>
 </p>
 
 <p align="center">
-  A Windows desktop application for IP camera monitoring and AI-assisted human detection, built with C# and .NET.
+  <img src="https://readme-typing-svg.demolab.com?font=JetBrains+Mono&weight=700&size=20&duration=2200&pause=500&color=00E5FF&center=true&vCenter=true&width=650&lines=REAL-TIME+CAMERA+MONITORING;AI-POWERED+HUMAN+DETECTION;INTELLIGENT+VISION.+SMARTER+MONITORING." alt="Animated VisionGuard tagline"/>
 </p>
 
 <p align="center">
-  <a href="https://github.com/Abhishek400217/VisionGuard">
-    <img src="https://img.shields.io/badge/Project-VisionGuard-00D4FF?style=for-the-badge&logo=shield&logoColor=white" alt="VisionGuard"/>
-  </a>
-  <img src="https://img.shields.io/badge/C%23-.NET-512BD4?style=for-the-badge&logo=dotnet&logoColor=white" alt="C# and .NET"/>
-  <img src="https://img.shields.io/badge/AI-YOLO_ONNX-111827?style=for-the-badge&logo=onnx&logoColor=white" alt="YOLO ONNX"/>
-  <img src="https://img.shields.io/badge/Platform-Windows-0078D4?style=for-the-badge&logo=windows&logoColor=white" alt="Windows"/>
+  <img src="assets/visionguard-radar.gif" width="90%" alt="Animated camera lens and radar scanning"/>
 </p>
 
 <p align="center">
-  <a href="#-overview">Overview</a> •
-  <a href="#-features">Features</a> •
-  <a href="#-technology-stack">Tech Stack</a> •
-  <a href="#-getting-started">Getting Started</a> •
-  <a href="#-roadmap">Roadmap</a>
+  <img src="https://img.shields.io/badge/C%23-.NET%208-68217A?style=for-the-badge&logo=dotnet&logoColor=white"/>
+  <img src="https://img.shields.io/badge/AI-YOLO%20%7C%20ONNX-00BFFF?style=for-the-badge"/>
+  <img src="https://img.shields.io/badge/STREAM-RTSP-00C853?style=for-the-badge"/>
+  <img src="https://img.shields.io/badge/PLATFORM-Windows-0078D4?style=for-the-badge&logo=windows&logoColor=white"/>
 </p>
 
 ---
 
-## 🎯 Overview
+## 🎯 Mission Control
 
-**VisionGuard** explores the integration of IP camera streaming and computer vision in a Windows desktop application. It combines live camera footage with YOLO-based human detection to support real-time visual monitoring.
+**VisionGuard** is a Windows desktop application for real-time IP camera streaming and AI-based human detection. It combines RTSP video input with YOLO ONNX inference to identify human detections in processed camera frames.
 
-The project focuses on connecting camera-streaming infrastructure with AI inference in a desktop workflow, providing a foundation for further surveillance and monitoring research.
+<table>
+<tr>
+<td width="50%">
 
-### Why VisionGuard?
+### 📡 Live Stream
+Connect to an IP camera using an RTSP stream.
 
-- **Live monitoring:** Work with an IP camera stream using RTSP.
-- **AI-assisted detection:** Use YOLO ONNX models for human detection.
-- **Windows desktop experience:** Built with C# and .NET.
-- **Extensible foundation:** Designed as a starting point for additional monitoring and detection capabilities.
+</td>
+<td width="50%">
 
-## ✨ Features
+### 🎯 Human Detection
+Filter detections for the human class.
 
-| Feature | Description |
-|---|---|
-| 📹 IP camera streaming | Connect to a compatible camera through an RTSP stream. |
-| 🧠 Human detection | Apply YOLO-based inference to identify human detections. |
-| 🎯 Human-only filtering | Focus detection output on the human class. |
-| 🖥️ Desktop interface | Windows Forms interface built with C#. |
-| ⚡ Frame processing | Process camera frames for AI inference and visual output. |
-| 🧩 ONNX model support | Include ONNX model files for the detection workflow. |
+</td>
+</tr>
+<tr>
+<td>
 
-*Feature availability depends on the current application configuration, model, and connected camera.*
+### ⚡ AI Inference
+Process camera frames with YOLO ONNX models.
 
-## 🛠️ Technology Stack
+</td>
+<td>
 
-<p>
-  <img src="https://img.shields.io/badge/C%23-68217A?style=flat-square&logo=csharp&logoColor=white" alt="C#"/>
-  <img src="https://img.shields.io/badge/.NET-512BD4?style=flat-square&logo=dotnet&logoColor=white" alt=".NET"/>
-  <img src="https://img.shields.io/badge/Windows_Forms-0078D4?style=flat-square&logo=windows&logoColor=white" alt="Windows Forms"/>
-  <img src="https://img.shields.io/badge/YOLO-111827?style=flat-square&logoColor=white" alt="YOLO"/>
-  <img src="https://img.shields.io/badge/ONNX-005CED?style=flat-square&logo=onnx&logoColor=white" alt="ONNX"/>
-  <img src="https://img.shields.io/badge/RTSP-Camera_Streaming-0F766E?style=flat-square" alt="RTSP"/>
-  <img src="https://img.shields.io/badge/Git-GitHub-181717?style=flat-square&logo=github&logoColor=white" alt="Git and GitHub"/>
+### 🖥️ Desktop Control
+View processed output in a Windows Forms interface.
+
+</td>
+</tr>
+</table>
+
+## 🔬 Inside the System
+
+<p align="center">
+  <img src="https://img.shields.io/badge/01-IP%20Camera-071D2B?style=flat-square&labelColor=0078D4"/>
+  ➜
+  <img src="https://img.shields.io/badge/02-RTSP%20Stream-071D2B?style=flat-square&labelColor=008C95"/>
+  ➜
+  <img src="https://img.shields.io/badge/03-Frame%20Processing-071D2B?style=flat-square&labelColor=615CFF"/>
+  ➜
+  <img src="https://img.shields.io/badge/04-YOLO%20ONNX-071D2B?style=flat-square&labelColor=8A3FFC"/>
+  ➜
+  <img src="https://img.shields.io/badge/05-Human%20Output-071D2B?style=flat-square&labelColor=00A86B"/>
 </p>
 
-- **Language:** C#
-- **Framework:** .NET 8 for Windows
-- **User interface:** Windows Forms
-- **Video input:** RTSP-compatible IP camera
-- **Detection:** YOLO model inference using ONNX assets
-- **Version control:** Git and GitHub
+## 🧰 Technology Stack
 
-## 🏗️ Application Workflow
+<p align="center">
+  <img src="https://skillicons.dev/icons?i=cs,dotnet,visualstudio,git,github&theme=dark" alt="Technology stack icons"/>
+</p>
 
-```mermaid
-flowchart TD
-    A[IP Camera] -->|RTSP Stream| B[Video Stream Processing]
-    B --> C[Frame Processing]
-    C --> D[YOLO ONNX Inference]
-    D --> E[Human-Class Filtering]
-    E --> F[Detection Visualization]
-    F --> G[Windows Desktop Interface]
+| Component | Role |
+|---|---|
+| C# / .NET 8 | Core application |
+| Windows Forms | Desktop interface |
+| RTSP | Live camera input |
+| YOLO / ONNX | AI detection inference |
+| Git / GitHub | Source control |
 
-    style A fill:#172554,color:#ffffff,stroke:#38bdf8
-    style D fill:#312e81,color:#ffffff,stroke:#a78bfa
-    style G fill:#064e3b,color:#ffffff,stroke:#34d399
-```
+## 🚀 Quick Launch
 
-The workflow illustrates the intended processing pipeline. Actual performance depends on camera resolution, model selection, hardware, and implementation details.
-
-## 📂 Project Structure
-
-```text
-VisionGuard/
-├── .github/                    # Repository configuration
-├── MainForm.cs                 # Application logic
-├── MainForm.Designer.cs        # Windows Forms UI layout
-├── MainForm.resx               # Form resources
-├── Program.cs                  # Application entry point
-├── VisionGuard.csproj          # Project configuration
-├── VisionGuard.sln             # Visual Studio solution
-├── yolo26n.onnx                # ONNX model asset
-├── yolo26s.onnx                # ONNX model asset
-├── yolo26s.pt                  # PyTorch model asset
-├── .gitignore
-└── README.md
-```
-
-*The model files shown above are the assets present in the project directory. Use the model required by your application configuration.*
-
-## 🚀 Getting Started
-
-### Prerequisites
-
-- Windows 10 or Windows 11
-- Visual Studio 2022 with the appropriate .NET desktop development components
-- .NET 8 SDK
-- A compatible IP camera or RTSP stream
-- Required NuGet dependencies specified by the project
-- The model files required by the application
-
-### 1. Clone the repository
+**Prerequisites:** Windows, .NET 8 SDK, Visual Studio 2022, a compatible IP camera, and the required model files.
 
 ```bash
 git clone https://github.com/Abhishek400217/VisionGuard.git
 cd VisionGuard
-```
-
-### 2. Open the solution
-
-Open `VisionGuard.sln` in Visual Studio 2022.
-
-### 3. Restore dependencies
-
-From the project directory, run:
-
-```bash
-dotnet restore
-```
-
-### 4. Configure the camera
-
-Configure the RTSP stream using the application's existing camera configuration. Keep credentials private and avoid committing connection strings containing usernames or passwords.
-
-### 5. Build and run
-
-```bash
+dotnet restore VisionGuard.sln
 dotnet build VisionGuard.sln
 ```
 
-Alternatively, select the appropriate startup project in Visual Studio and press **F5**.
-
-> **Note:** Successful execution requires the correct model assets, camera configuration, and dependencies. The exact setup may vary with your camera and local environment.
-
-## 🖼️ Screenshots & Demo
-
-Screenshots and a demonstration GIF can be added here once captured from the running application.
-
-<p align="center">
-  <em>Planned showcase: live camera feed · human detection output · monitoring interface</em>
-</p>
-
-To keep the repository authentic, use actual application screenshots rather than illustrative mockups.
+Open `VisionGuard.sln` in Visual Studio, configure your camera stream and model path, then press **F5**.
 
 ## 🗺️ Roadmap
 
-- [x] Windows desktop application foundation
-- [x] RTSP camera-streaming workflow
-- [x] YOLO ONNX model assets
-- [x] Human-class detection filtering
-- [ ] Improved diagnostics and structured logging
 - [ ] Detection confidence and performance metrics
+- [ ] Better diagnostics and logging
 - [ ] Configurable camera and model settings
-- [ ] Event history and optional alert workflows
-- [ ] Documentation and demonstration video
+- [ ] Detection event history and alerts
+- [ ] Further inference optimizations
 
-*Roadmap items are planned improvements, not claims of existing functionality.*
-
-## 🔒 Security & Privacy
-
-- Never commit camera credentials, API keys, or sensitive configuration.
-- Use trusted camera networks and restrict access to camera streams.
-- Follow applicable privacy requirements when monitoring people.
-- Review model and dependency licenses before redistribution.
-
-## 🤝 Contributing
-
-Contributions, bug reports, and suggestions are welcome.
-
-1. Fork the repository.
-2. Create a feature branch.
-3. Make and test your changes.
-4. Submit a pull request with a clear explanation of the change.
-
-For significant changes, open an issue first to discuss the proposed approach.
-
-## 👨‍💻 Author
-
-**Abhishek Karande**
-
-Software development project exploring computer vision, IP camera streaming, and AI-assisted monitoring.
-
-- GitHub: [@Abhishek400217](https://github.com/Abhishek400217)
-- Project repository: [VisionGuard](https://github.com/Abhishek400217/VisionGuard)
-
-## 📄 License
-
-No license has been specified yet. Add a `LICENSE` file before permitting others to reuse or redistribute the project.
-
----
+## 👨‍💻 Developer
 
 <p align="center">
-  <strong>VisionGuard</strong><br/>
-  <sub>Connecting camera streams with intelligent visual monitoring.</sub>
+  <img src="https://readme-typing-svg.demolab.com?font=JetBrains+Mono&size=17&duration=2800&pause=800&color=00FFB2&center=true&vCenter=true&width=500&lines=Built+by+Abhishek+Karande;Computer+Vision+%7C+AI+%7C+.NET" alt="Animated developer tagline"/>
+  <br/>
+  <a href="https://github.com/Abhishek400217">
+    <img src="https://img.shields.io/badge/GitHub-Abhishek400217-111827?style=for-the-badge&logo=github&logoColor=white"/>
+  </a>
 </p>
+
+<p align="center">
+  <img src="https://capsule-render.vercel.app/api?type=waving&color=0:00FFB2,50:615CFF,100:00E5FF&height=100&section=footer&animation=twinkling" width="100%" alt="Animated footer"/>
+</p>
+
+<p align="center"><b>INTELLIGENT VISION. SMARTER MONITORING.</b></p>
