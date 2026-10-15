@@ -2,8 +2,8 @@
 
 <p align="center">
   <img src="https://capsule-render.vercel.app/api?type=waving&color=0:00E5FF,50:615CFF,100:00FFB2&height=170&section=header&text=VISIONGUARD&fontSize=42&fontColor=ffffff&animation=twinkling&fontAlignY=38&desc=SEE%20BEYOND%20THE%20FRAME&descAlignY=60&descSize=16" width="100%" alt="Animated VisionGuard header"/>
-</p>
-
+</p> 
+ 
 <p align="center">
   <img src="https://readme-typing-svg.demolab.com?font=JetBrains+Mono&weight=700&size=20&duration=2200&pause=500&color=00E5FF&center=true&vCenter=true&width=650&lines=REAL-TIME+CAMERA+MONITORING;AI-POWERED+HUMAN+DETECTION;INTELLIGENT+VISION.+SMARTER+MONITORING." alt="Animated VisionGuard tagline"/>
 </p>
