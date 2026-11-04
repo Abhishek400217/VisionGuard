@@ -12,12 +12,26 @@ using System.Windows.Forms;
 using OpenCvSharp;
 using System.Collections.Generic;
 using System.Linq;
-
+using Microsoft.Data.SqlClient;
+using System.Data;
 
 namespace CameraObjectDetection
 {
     public partial class MainForm : Form
     {
+
+        // SQL Server connection
+        private const string ConnectionString =
+    @"Server=(localdb)\MSSQLLocalDB;Database=VisionGuardDB;Integrated Security=True;Encrypt=True;TrustServerCertificate=True;Connect Timeout=15;";
+
+        // Human detection event state
+        private readonly object _presenceLock = new object();
+
+        private bool _humanPresenceActive = false;
+        private DateTime _lastHumanSeenUtc = DateTime.MinValue;
+
+
+
         // ==========================================
         // VLC
         // ==========================================
@@ -43,8 +57,8 @@ namespace CameraObjectDetection
 
         private IntPtr _frameBuffer = IntPtr.Zero;
 
-        private const uint FrameWidth = 2560;
-        private const uint FrameHeight = 1440;
+        private const uint FrameWidth = 1280;
+        private const uint FrameHeight = 720;
 
         private readonly object _frameLock = new object();
 
@@ -53,11 +67,28 @@ namespace CameraObjectDetection
         // Latest camera frame with object detections
         private Bitmap _detectionBitmap;
         private readonly object _detectionBitmapLock = new object();
+        // Latest camera frame, shared between VLC and AI
+        private byte[] _latestFrameBytes;
+        private int _latestFrameVersion = 0;
+        private int _lastProcessedFrameVersion = 0;
+
+        private volatile bool _hasReceivedFrame = false;
+        private volatile bool _isCameraRunning = false;
+
+        // Persistent bitmap for smooth live display
+        private Bitmap _liveBitmap;
+        private System.Windows.Forms.Timer _displayTimer;
+
+        // Latest human detections
+        private List<Detection> _latestDetections =
+            new List<Detection>();
+
+
         // ==========================================
         // COCO class names
         // ==========================================
 
-        
+
 
         private readonly string[] _classNames =
         {
@@ -242,9 +273,23 @@ namespace CameraObjectDetection
             lblDetectionTitle.Visible = false;
             lblDetectionHint.Visible = false;
             lblCameraHint.Text = "Live stream with AI human detection";
+            // Persistent live video bitmap
+            _liveBitmap = new Bitmap(
+                (int)FrameWidth,
+                (int)FrameHeight,
+                PixelFormat.Format32bppRgb);
+
+            pictureBoxDetection.Image = _liveBitmap;
+            pictureBoxDetection.Paint += PictureBoxDetection_Paint;
+
+            // Display target: approximately 25 updates per second
+            _displayTimer = new System.Windows.Forms.Timer();
+            _displayTimer.Interval = 40;
+            _displayTimer.Tick += DisplayTimer_Tick;
+            _displayTimer.Start();
 
 
-            
+
 
             // ==========================================
             // Load YOLO ONNX model
@@ -252,7 +297,7 @@ namespace CameraObjectDetection
 
             string modelPath = Path.Combine(
             Application.StartupPath,
-            "yolo26s.onnx");
+            "yolo26n.onnx");
 
             if (!File.Exists(modelPath))
             {
@@ -264,7 +309,21 @@ namespace CameraObjectDetection
                 return;
             }
 
-            _yoloSession = new InferenceSession(modelPath);
+            using (var sessionOptions = new SessionOptions())
+            {
+                sessionOptions.GraphOptimizationLevel =
+                    GraphOptimizationLevel.ORT_ENABLE_ALL;
+
+                sessionOptions.ExecutionMode =
+                    ExecutionMode.ORT_SEQUENTIAL;
+
+                sessionOptions.IntraOpNumThreads = 4;
+                sessionOptions.InterOpNumThreads = 1;
+
+                _yoloSession = new InferenceSession(
+                    modelPath,
+                    sessionOptions);
+            }
 
             // ==========================================
             // Initialize VLC
@@ -292,6 +351,7 @@ namespace CameraObjectDetection
 
             btnStartCamera.Click += btnStartCamera_Click;
             btnStopCamera.Click += button1_Click_1;
+            _ = TestAndLogDatabaseConnectionAsync();
         }
 
         // ==========================================
@@ -355,77 +415,285 @@ namespace CameraObjectDetection
         // ==========================================
 
         private void DisplayFrame(
-            IntPtr opaque,
-            IntPtr picture)
+    IntPtr opaque,
+    IntPtr picture)
         {
-            if (_frameBuffer == IntPtr.Zero)
+            if (!_isCameraRunning ||
+                _frameBuffer == IntPtr.Zero)
                 return;
-
-            // Don't start another YOLO process
-            // if previous frame is still processing.
-            if (System.Threading.Interlocked.CompareExchange(
-                    ref _isProcessing,
-                    1,
-                    0) != 0)
-            {
-                return;
-            }
 
             try
             {
-                int bufferSize =
-               (int)(FrameWidth * FrameHeight * 4);
+                int bufferSize = checked(
+                    (int)(FrameWidth * FrameHeight * 4));
 
-                byte[] frameBytes =
-                    new byte[bufferSize];
-
-                // Copy VLC frame into managed memory
                 lock (_frameLock)
                 {
+                    if (_latestFrameBytes == null ||
+                        _latestFrameBytes.Length != bufferSize)
+                    {
+                        _latestFrameBytes = new byte[bufferSize];
+                    }
+
+                    // Keep the newest decoded camera frame.
                     Marshal.Copy(
                         _frameBuffer,
-                        frameBytes,
+                        _latestFrameBytes,
                         0,
                         bufferSize);
+
+                    _latestFrameVersion++;
+                    _hasReceivedFrame = true;
                 }
 
-                // Process frame in background
-                Task.Run(() =>
+                // Start AI processing only if no AI loop is running.
+                if (System.Threading.Interlocked.CompareExchange(
+                        ref _isProcessing, 1, 0) == 0)
                 {
-                    try
-                    {
-                        ProcessFrame(frameBytes);
-                    }
-                    catch (Exception ex)
-                    {
-                        System.Diagnostics.Debug.WriteLine(
-                        "YOLO Error: " + ex.Message);
-                    }
-                    finally
-                    {
-                        System.Threading.Interlocked.Exchange(
-                        ref _isProcessing,
-                        0);
-                    }
-                });
+                    _ = Task.Run(ProcessLatestFramesLoop);
+                }
             }
-            catch
+            catch (Exception ex)
             {
-                System.Threading.Interlocked.Exchange(
-                 ref _isProcessing,
-                 0);
+                Debug.WriteLine(
+                    "DisplayFrame error: " + ex.Message);
             }
         }
 
         // ==========================================
         // Convert camera frame and run YOLO
         // ==========================================
+        private void ProcessLatestFramesLoop()
+        {
+            try
+            {
+                while (_isCameraRunning)
+                {
+                    byte[] frameBytes;
+                    int version;
 
+                    lock (_frameLock)
+                    {
+                        if (_latestFrameBytes == null ||
+                            _latestFrameVersion ==
+                            _lastProcessedFrameVersion)
+                        {
+                            break;
+                        }
+
+                        version = _latestFrameVersion;
+
+                        // Snapshot the latest frame for AI processing.
+                        frameBytes =
+                            (byte[])_latestFrameBytes.Clone();
+                    }
+
+                    try
+                    {
+                        ProcessFrame(frameBytes);
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine(
+                            "YOLO processing error: " + ex.Message);
+                    }
+
+                    lock (_frameLock)
+                    {
+                        _lastProcessedFrameVersion = version;
+
+                        // If a newer frame arrived, process that next.
+                        if (!_isCameraRunning ||
+                            _latestFrameBytes == null ||
+                            _latestFrameVersion == version)
+                        {
+                            break;
+                        }
+                    }
+                }
+            }
+            finally
+            {
+                System.Threading.Interlocked.Exchange(
+                    ref _isProcessing, 0);
+
+                bool pending;
+
+                lock (_frameLock)
+                {
+                    pending =
+                        _isCameraRunning &&
+                        _latestFrameBytes != null &&
+                        _latestFrameVersion !=
+                        _lastProcessedFrameVersion;
+                }
+
+                // Handle a newer frame arriving as the loop ends.
+                if (pending &&
+                    System.Threading.Interlocked.CompareExchange(
+                        ref _isProcessing, 1, 0) == 0)
+                {
+                    _ = Task.Run(ProcessLatestFramesLoop);
+                }
+            }
+        }
+
+        private void DisplayTimer_Tick(
+    object sender,
+    EventArgs e)
+        {
+            if (!_hasReceivedFrame ||
+                _liveBitmap == null ||
+                pictureBoxDetection.IsDisposed)
+            {
+                return;
+            }
+
+            BitmapData data = null;
+
+            try
+            {
+                data = _liveBitmap.LockBits(
+                    new Rectangle(
+                        0, 0,
+                        _liveBitmap.Width,
+                        _liveBitmap.Height),
+                    ImageLockMode.WriteOnly,
+                    PixelFormat.Format32bppRgb);
+
+                lock (_frameLock)
+                {
+                    if (_latestFrameBytes != null)
+                    {
+                        Marshal.Copy(
+                            _latestFrameBytes,
+                            0,
+                            data.Scan0,
+                            _latestFrameBytes.Length);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine(
+                    "Live display error: " + ex.Message);
+            }
+            finally
+            {
+                if (data != null)
+                    _liveBitmap.UnlockBits(data);
+            }
+
+            pictureBoxDetection.Invalidate();
+        }
+
+        private void PictureBoxDetection_Paint(
+    object sender,
+    PaintEventArgs e)
+        {
+            if (!_hasReceivedFrame)
+                return;
+
+            List<Detection> detections;
+
+            lock (_detectionBitmapLock)
+            {
+                detections = _latestDetections.ToList();
+            }
+
+            if (detections.Count == 0)
+                return;
+
+            float frameW = FrameWidth;
+            float frameH = FrameHeight;
+
+            float controlW = pictureBoxDetection.ClientSize.Width;
+            float controlH = pictureBoxDetection.ClientSize.Height;
+
+            if (controlW <= 0 || controlH <= 0)
+                return;
+
+            // Match PictureBoxSizeMode.Zoom scaling.
+            float displayScale = Math.Min(
+                controlW / frameW,
+                controlH / frameH);
+
+            float offsetX =
+                (controlW - frameW * displayScale) / 2f;
+
+            float offsetY =
+                (controlH - frameH * displayScale) / 2f;
+
+            // Mapping from the 640x640 model input to camera frame.
+            float modelScale = Math.Min(
+                YoloWidth / frameW,
+                YoloHeight / frameH);
+
+            float paddingX =
+                (YoloWidth - frameW * modelScale) / 2f;
+
+            float paddingY =
+                (YoloHeight - frameH * modelScale) / 2f;
+
+            using Pen pen = new Pen(Color.Lime, 2);
+            using Font font = new Font(
+                "Arial", 11, FontStyle.Bold);
+
+            using SolidBrush textBrush =
+                new SolidBrush(Color.White);
+
+            using SolidBrush backgroundBrush =
+                new SolidBrush(Color.DarkGreen);
+
+            foreach (Detection d in detections)
+            {
+                float sx1 = (d.X1 - paddingX) / modelScale;
+                float sy1 = (d.Y1 - paddingY) / modelScale;
+                float sx2 = (d.X2 - paddingX) / modelScale;
+                float sy2 = (d.Y2 - paddingY) / modelScale;
+
+                sx1 = Math.Max(0, Math.Min(frameW - 1, sx1));
+                sy1 = Math.Max(0, Math.Min(frameH - 1, sy1));
+                sx2 = Math.Max(0, Math.Min(frameW - 1, sx2));
+                sy2 = Math.Max(0, Math.Min(frameH - 1, sy2));
+
+                float x1 = offsetX + sx1 * displayScale;
+                float y1 = offsetY + sy1 * displayScale;
+                float x2 = offsetX + sx2 * displayScale;
+                float y2 = offsetY + sy2 * displayScale;
+
+                if (x2 <= x1 || y2 <= y1)
+                    continue;
+
+                e.Graphics.DrawRectangle(
+                    pen, x1, y1, x2 - x1, y2 - y1);
+
+                string label = $"person {d.Confidence:P0}";
+
+                SizeF labelSize =
+                    e.Graphics.MeasureString(label, font);
+
+                float labelY =
+                    Math.Max(0, y1 - labelSize.Height);
+
+                e.Graphics.FillRectangle(
+                    backgroundBrush,
+                    x1,
+                    labelY,
+                    labelSize.Width + 6,
+                    labelSize.Height);
+
+                e.Graphics.DrawString(
+                    label,
+                    font,
+                    textBrush,
+                    x1 + 3,
+                    labelY);
+            }
+        }
 
         private void ProcessFrame(byte[] frameBytes)
         {
-            Bitmap annotatedBitmap = null;
-
             try
             {
                 using Mat cameraMat = new Mat(
@@ -442,9 +710,9 @@ namespace CameraObjectDetection
                 using Mat rgbMat = new Mat();
 
                 Cv2.CvtColor(
-                cameraMat,
-                rgbMat,
-                ColorConversionCodes.BGRA2BGR);
+                    cameraMat,
+                    rgbMat,
+                    ColorConversionCodes.BGRA2BGR);
 
                 using Bitmap cameraBitmap = new Bitmap(
                     rgbMat.Width,
@@ -453,10 +721,10 @@ namespace CameraObjectDetection
                     PixelFormat.Format24bppRgb,
                     rgbMat.Data);
 
-                    using Bitmap resizedBitmap =
+                using Bitmap resizedBitmap =
                     ResizeImage(cameraBitmap, YoloWidth, YoloHeight);
 
-                    DenseTensor<float> inputTensor =
+                DenseTensor<float> inputTensor =
                     CreateInputTensor(resizedBitmap);
 
                 string inputName =
@@ -464,79 +732,224 @@ namespace CameraObjectDetection
 
                 var inputs = new[]
                 {
-            NamedOnnxValue.CreateFromTensor(inputName, inputTensor)
+            NamedOnnxValue.CreateFromTensor(
+                inputName, inputTensor)
         };
 
-                    using IDisposableReadOnlyCollection<DisposableNamedOnnxValue> results =
-                    _yoloSession.Run(inputs);
+                using IDisposableReadOnlyCollection<
+                    DisposableNamedOnnxValue> results =
+                        _yoloSession.Run(inputs);
 
                 var output = results.First().AsTensor<float>();
 
-                // Run object detection.
-                List<Detection> detections = DetectObjects(output)
-                .Where(d => d.ClassId == 0)
-                .ToList();
+                List<Detection> detections =
+                    DetectObjects(output)
+                        .Where(d => d.ClassId == 0)
+                        .ToList();
+                RegisterHumanDetection(detections);
+                // Store the latest detections for the Paint overlay.
+                lock (_detectionBitmapLock)
+                {
+                    _latestDetections = detections;
+                }
 
                 int personCount = detections.Count;
 
                 if (!IsDisposed && IsHandleCreated)
                 {
-                    BeginInvoke(new Action(() =>
+                    try
                     {
-                        if (!IsDisposed)
-                            lblPersonCount.Text = $"HUMANS DETECTED: {personCount}";
-                    }));
-                }
-
-                // Draw the boxes on the original camera frame.
-                annotatedBitmap = DrawDetections(cameraBitmap, detections);
-
-                // Transfer the annotated image to the PictureBox.
-                Bitmap imageToDisplay = annotatedBitmap;
-                annotatedBitmap = null;
-
-                try
-                {
-                    if (pictureBoxDetection.IsDisposed ||
-                        !pictureBoxDetection.IsHandleCreated)
-                    {
-                        imageToDisplay.Dispose();
-                        return;
-                    }
-
-                    pictureBoxDetection.BeginInvoke(new Action(() =>
-                    {
-                        if (pictureBoxDetection.IsDisposed)
+                        BeginInvoke(new Action(() =>
                         {
-                            imageToDisplay.Dispose();
-                            return;
-                        }
+                            if (!IsDisposed)
+                            {
+                                lblPersonCount.Text =
+                                    $"HUMANS DETECTED: {personCount}";
 
-                        Image previousImage = pictureBoxDetection.Image;
-                        pictureBoxDetection.Image = imageToDisplay;
-                        previousImage?.Dispose();
-                    }));
-                }
-                catch
-                {
-                    imageToDisplay.Dispose();
-                    throw;
+                                pictureBoxDetection.Invalidate();
+                            }
+                        }));
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        // The form may be closing.
+                    }
                 }
             }
             catch (Exception ex)
             {
-                Debug.WriteLine("Object detection error: " + ex.Message);
+                Debug.WriteLine(
+                    "Object detection error: " + ex.Message);
             }
-            finally
+        }
+
+        private void RegisterHumanDetection(
+    List<Detection> detections)
+        {
+            bool shouldSave = false;
+
+            lock (_presenceLock)
             {
-                annotatedBitmap?.Dispose();
+                DateTime now = DateTime.UtcNow;
+
+                if (detections.Count > 0)
+                {
+                    _lastHumanSeenUtc = now;
+
+                    // Save only once when human presence starts.
+                    if (!_humanPresenceActive)
+                    {
+                        _humanPresenceActive = true;
+                        shouldSave = true;
+                    }
+                }
+                else
+                {
+                    // Reset only after 3 seconds without detection.
+                    if (_humanPresenceActive &&
+                        (now - _lastHumanSeenUtc).TotalSeconds >= 3)
+                    {
+                        _humanPresenceActive = false;
+                    }
+                }
+            }
+
+            if (shouldSave)
+            {
+                float confidence =
+                    detections.Max(d => d.Confidence);
+
+                _ = SaveHumanDetectionEventAsync(
+                    detections.Count,
+                    confidence);
             }
         }
 
 
-        // ==========================================
-        // Create Bitmap from VLC bytes
-        // ==========================================
+        private async Task SaveHumanDetectionEventAsync(
+            int personCount,
+            float confidence)
+        {
+            try
+            {
+                using (SqlConnection connection =
+                    new SqlConnection(ConnectionString))
+                {
+                    await connection.OpenAsync();
+
+                    string sql = @"
+                INSERT INTO dbo.HumanDetectionEvents
+                    (CameraId, TrackingId, EventType,
+                     PersonCount, Confidence)
+                VALUES
+                    (@CameraId, NULL, @EventType,
+                     @PersonCount, @Confidence);";
+
+                    using (SqlCommand command =
+                        new SqlCommand(sql, connection))
+                    {
+                        command.Parameters.Add(
+                            "@CameraId",
+                            SqlDbType.NVarChar,
+                            100).Value = "VIGI-Camera-01";
+
+                        command.Parameters.Add(
+                            "@EventType",
+                            SqlDbType.NVarChar,
+                            30).Value = "HUMAN_DETECTED";
+
+                        command.Parameters.Add(
+                            "@PersonCount",
+                            SqlDbType.Int).Value = personCount;
+
+                        command.Parameters.Add(
+                            "@Confidence",
+                            SqlDbType.Real).Value = confidence;
+
+                        await command.ExecuteNonQueryAsync();
+                    }
+                }
+
+                Debug.WriteLine(
+                    "SUCCESS: HUMAN DETECTION SAVED TO DATABASE");
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine(
+                    "HUMAN LOG SAVE ERROR: " + ex.ToString());
+            }
+        }
+
+        private void SetDatabaseStatus(string status)
+        {
+            if (IsDisposed)
+                return;
+
+            Action update = () =>
+            {
+                Text = "VisionGuard | " + status;
+            };
+
+            try
+            {
+                if (IsHandleCreated && InvokeRequired)
+                    BeginInvoke(update);
+                else
+                    update();
+            }
+            catch (InvalidOperationException ex)
+            {
+                Debug.WriteLine(ex.Message);
+            }
+        }
+
+
+
+        private async Task TestAndLogDatabaseConnectionAsync()
+        {
+            try
+            {
+                using (SqlConnection connection =
+                    new SqlConnection(ConnectionString))
+                {
+                    await connection.OpenAsync();
+
+                    string sql = @"
+                INSERT INTO dbo.DatabaseConnectionLogs
+                    (AppName, MachineName)
+                VALUES
+                    (@AppName, @MachineName);";
+
+                    using (SqlCommand command =
+                        new SqlCommand(sql, connection))
+                    {
+                        command.Parameters.Add(
+                            "@AppName",
+                            SqlDbType.NVarChar,
+                            100).Value = "VisionGuard";
+
+                        command.Parameters.Add(
+                            "@MachineName",
+                            SqlDbType.NVarChar,
+                            128).Value = Environment.MachineName;
+
+                        await command.ExecuteNonQueryAsync();
+                    }
+                }
+
+                SetDatabaseStatus("DATABASE CONNECTED");
+
+                Debug.WriteLine(
+                    "SUCCESS: SQL DATABASE CONNECTED AND TEST LOG SAVED");
+            }
+            catch (Exception ex)
+            {
+                SetDatabaseStatus("DATABASE CONNECTION FAILED");
+
+                Debug.WriteLine(
+                    "DATABASE ERROR: " + ex.ToString());
+            }
+        }
 
         private Bitmap CreateBitmapFromBytes(
             byte[] bytes)
@@ -617,37 +1030,64 @@ namespace CameraObjectDetection
         // ==========================================
 
         private DenseTensor<float> CreateInputTensor(
-            Bitmap bitmap)
+    Bitmap bitmap)
         {
             DenseTensor<float> tensor =
-               new DenseTensor<float>(
-                 new[]
-                 {
-                        1,
-                        3,
-                        YoloHeight,
-                        YoloWidth
-                 });
+                new DenseTensor<float>(
+                    new[]
+                    {
+                1, 3, YoloHeight, YoloWidth
+                    });
 
-            for (int y = 0; y < YoloHeight; y++)
+            Rectangle rect = new Rectangle(
+                0, 0, YoloWidth, YoloHeight);
+
+            BitmapData data = bitmap.LockBits(
+                rect,
+                ImageLockMode.ReadOnly,
+                PixelFormat.Format24bppRgb);
+
+            try
             {
-                for (int x = 0; x < YoloWidth; x++)
+                int stride = data.Stride;
+
+                if (stride < 0)
                 {
-                    Color pixel =
-                    bitmap.GetPixel(x, y);
-
-                    // Normalize RGB values 0-255
-                    // to 0-1
-
-                    tensor[0, 0, y, x] =
-                    pixel.R / 255.0f;
-
-                    tensor[0, 1, y, x] =
-                    pixel.G / 255.0f;
-
-                    tensor[0, 2, y, x] =
-                        pixel.B / 255.0f;
+                    throw new InvalidOperationException(
+                        "Negative bitmap stride is unsupported.");
                 }
+
+                byte[] pixels = new byte[stride * YoloHeight];
+
+                Marshal.Copy(
+                    data.Scan0,
+                    pixels,
+                    0,
+                    pixels.Length);
+
+                for (int y = 0; y < YoloHeight; y++)
+                {
+                    int rowOffset = y * stride;
+
+                    for (int x = 0; x < YoloWidth; x++)
+                    {
+                        int i = rowOffset + x * 3;
+
+                        // 24-bit bitmap memory order: B, G, R.
+                        tensor[0, 0, y, x] =
+                            pixels[i + 2] / 255.0f;
+
+                        tensor[0, 1, y, x] =
+                            pixels[i + 1] / 255.0f;
+
+                        tensor[0, 2, y, x] =
+                            pixels[i] / 255.0f;
+                    }
+                }
+            }
+            finally
+            {
+                bitmap.UnlockBits(data);
             }
 
             return tensor;
@@ -975,6 +1415,7 @@ namespace CameraObjectDetection
                 string rtspUrl =
                     "rtsp://admin:admin@123@192.168.0.60:554/stream1";
 
+                _isCameraRunning = false;
                 _framePlayer.Stop();
 
                 _frameMedia?.Dispose();
@@ -983,6 +1424,29 @@ namespace CameraObjectDetection
                     _libVLC,
                     rtspUrl,
                     FromType.FromLocation);
+                 
+                _frameMedia.AddOption(":rtsp-tcp");
+                _frameMedia.AddOption(":network-caching=200");
+                _frameMedia.AddOption(":live-caching=200");
+
+                lock (_frameLock)
+                {
+                    int size = checked(
+                        (int)(FrameWidth * FrameHeight * 4));
+
+                    _latestFrameBytes = new byte[size];
+
+                    _latestFrameVersion++;
+                    _lastProcessedFrameVersion = _latestFrameVersion;
+                }
+
+                lock (_detectionBitmapLock)
+                {
+                    _latestDetections.Clear();
+                }
+
+                _hasReceivedFrame = false;
+                _isCameraRunning = true;
 
                 _framePlayer.Play(_frameMedia);
 
@@ -991,6 +1455,7 @@ namespace CameraObjectDetection
             }
             catch (Exception ex)
             {
+                _isCameraRunning = false;
                 MessageBox.Show("Camera Error: " + ex.Message);
             }
         }
@@ -1001,16 +1466,43 @@ namespace CameraObjectDetection
 
         private void button1_Click_1(object sender, EventArgs e)
         {
+            // Stop accepting new camera frames first.
+            _isCameraRunning = false;
+            _hasReceivedFrame = false;
+
             _framePlayer?.Stop();
+
             lblLiveStatus.Text = "● CAMERA DISCONNECTED";
-            lblLiveStatus.ForeColor = Color.FromArgb(255, 194, 85);
+            lblLiveStatus.ForeColor =
+                Color.FromArgb(255, 194, 85);
 
             _frameMedia?.Dispose();
             _frameMedia = null;
 
-            Image oldImage = pictureBoxDetection.Image;
-            pictureBoxDetection.Image = null;
-            oldImage?.Dispose();
+            lock (_frameLock)
+            {
+                _latestFrameBytes = null;
+                _latestFrameVersion++;
+
+                _lastProcessedFrameVersion =
+                    _latestFrameVersion;
+            }
+
+            lock (_detectionBitmapLock)
+            {
+                _latestDetections.Clear();
+            }
+
+            // Do not dispose the persistent live bitmap here.
+            if (_liveBitmap != null)
+            {
+                using (Graphics g = Graphics.FromImage(_liveBitmap))
+                {
+                    g.Clear(Color.Black);
+                }
+            }
+
+            pictureBoxDetection.Invalidate();
         }
 
         // ==========================================
@@ -1020,6 +1512,13 @@ namespace CameraObjectDetection
 
         protected override void OnFormClosed(FormClosedEventArgs e)
         {
+            _isCameraRunning = false;
+            _hasReceivedFrame = false;
+
+            _displayTimer?.Stop();
+            _displayTimer?.Dispose();
+            _displayTimer = null;
+
             _framePlayer?.Stop();
 
             _frameMedia?.Dispose();
@@ -1043,6 +1542,8 @@ namespace CameraObjectDetection
             Image oldImage = pictureBoxDetection.Image;
             pictureBoxDetection.Image = null;
             oldImage?.Dispose();
+
+            _liveBitmap = null;
 
             base.OnFormClosed(e);
         }
