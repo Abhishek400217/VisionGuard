@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="270" viewBox="0 0 1200 270" role="img" aria-labelledby="title desc">
+  <title id="title">VisionGuard processing pipeline</title>
+  <desc id="desc">RTSP camera frames flow through LibVLCSharp, YOLO ONNX human detection and SQL Server event logging.</desc>
+  <defs>
+    <linearGradient id="panel" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0b1728"/><stop offset="1" stop-color="#142b45"/></linearGradient>
+    <linearGradient id="node" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#12395a"/><stop offset="1" stop-color="#10243a"/></linearGradient>
+  </defs>
+  <rect width="1200" height="270" rx="20" fill="url(#panel)"/>
+  <g fill="url(#node)" stroke="#2563eb" stroke-opacity=".8" stroke-width="1.5">
+    <rect x="28" y="78" width="210" height="112" rx="14"/><rect x="278" y="78" width="210" height="112" rx="14"/><rect x="528" y="78" width="210" height="112" rx="14"/><rect x="778" y="78" width="180" height="112" rx="14"/><rect x="998" y="78" width="174" height="112" rx="14"/>
+  </g>
+  <g font-family="Segoe UI,Arial,sans-serif" text-anchor="middle">
+    <g fill="#f8fafc" font-size="18" font-weight="700"><text x="133" y="120">VIGI CAMERA</text><text x="383" y="120">LibVLCSharp</text><text x="633" y="120">YOLO26n ONNX</text><text x="868" y="120">HUMAN</text><text x="1085" y="120">SQL SERVER</text></g>
+    <g fill="#93c5fd" font-size="12"><text x="133" y="148">RTSP · H.264</text><text x="383" y="148">Decode + Frames</text><text x="633" y="148">Inference</text><text x="868" y="148">Count + Boxes</text><text x="1085" y="148">Event Logs</text></g>
+  </g>
+  <g stroke="#38bdf8" stroke-width="3" fill="none" stroke-linecap="round"><path d="M239 134H268M489 134H518M739 134H768M959 134H988"/></g>
+  <g fill="#67e8f9">
+    <circle r="5"><animate attributeName="cx" values="240;268;240" dur="1.3s" repeatCount="indefinite"/><animate attributeName="cy" values="134;134;134" dur="1.3s" repeatCount="indefinite"/></circle>
+    <circle r="5"><animate attributeName="cx" values="490;518;490" dur="1.3s" begin=".3s" repeatCount="indefinite"/><animate attributeName="cy" values="134;134;134" dur="1.3s" begin=".3s" repeatCount="indefinite"/></circle>
+    <circle r="5"><animate attributeName="cx" values="740;768;740" dur="1.3s" begin=".6s" repeatCount="indefinite"/><animate attributeName="cy" values="134;134;134" dur="1.3s" begin=".6s" repeatCount="indefinite"/></circle>
+    <circle r="5"><animate attributeName="cx" values="960;988;960" dur="1.3s" begin=".9s" repeatCount="indefinite"/><animate attributeName="cy" values="134;134;134" dur="1.3s" begin=".9s" repeatCount="indefinite"/></circle>
+  </g>
+  <text x="600" y="232" fill="#94a3b8" font-family="Segoe UI,Arial,sans-serif" font-size="13" text-anchor="middle" letter-spacing="1.5">LIVE DISPLAY AND AI INFERENCE RUN AS SEPARATE PIPELINES</text>
+</svg>
