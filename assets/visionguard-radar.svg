@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="300" viewBox="0 0 1200 300" role="img" aria-labelledby="title desc">
+  <title id="title">VisionGuard animated radar</title>
+  <desc id="desc">Dark blue camera-monitoring artwork with animated radar sweep and detection markers.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#071426"/><stop offset=".55" stop-color="#102743"/><stop offset="1" stop-color="#071426"/></linearGradient>
+    <linearGradient id="line" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#22d3ee" stop-opacity="0"/><stop offset=".5" stop-color="#22d3ee"/><stop offset="1" stop-color="#60a5fa" stop-opacity="0"/></linearGradient>
+    <radialGradient id="glow"><stop offset="0" stop-color="#22d3ee" stop-opacity=".22"/><stop offset="1" stop-color="#22d3ee" stop-opacity="0"/></radialGradient>
+    <clipPath id="radarClip"><circle cx="990" cy="150" r="105"/></clipPath>
+  </defs>
+  <rect width="1200" height="300" rx="24" fill="url(#bg)"/>
+  <circle cx="990" cy="150" r="145" fill="url(#glow)"/>
+  <g opacity=".16" stroke="#7dd3fc"><path d="M0 60H1200M0 120H1200M0 180H1200M0 240H1200"/><path d="M200 0V300M400 0V300M600 0V300M800 0V300M1000 0V300"/></g>
+  <path d="M52 224H690" stroke="url(#line)" stroke-width="2"/>
+  <text x="64" y="113" fill="#f8fafc" font-family="Segoe UI,Arial,sans-serif" font-size="50" font-weight="700" letter-spacing="2">VISIONGUARD</text>
+  <text x="67" y="151" fill="#93c5fd" font-family="Segoe UI,Arial,sans-serif" font-size="19" letter-spacing="4">AI-POWERED HUMAN MONITORING</text>
+  <text x="67" y="194" fill="#cbd5e1" font-family="Segoe UI,Arial,sans-serif" font-size="16">RTSP  /  YOLO ONNX  /  LIVE STREAM  /  SQL SERVER</text>
+  <g clip-path="url(#radarClip)">
+    <circle cx="990" cy="150" r="105" fill="#081a2e" fill-opacity=".45"/>
+    <g stroke="#38bdf8" stroke-opacity=".55" fill="none"><circle cx="990" cy="150" r="35"/><circle cx="990" cy="150" r="70"/><circle cx="990" cy="150" r="105"/><path d="M885 150H1095M990 45V255M916 76L1064 224M1064 76L916 224"/></g>
+    <path d="M990 150L990 45A105 105 0 0 1 1089 115Z" fill="#22d3ee" fill-opacity=".18"/>
+    <path d="M990 150L990 45" stroke="#67e8f9" stroke-width="3"><animateTransform attributeName="transform" type="rotate" from="0 990 150" to="360 990 150" dur="5s" repeatCount="indefinite"/></path>
+    <circle cx="1024" cy="104" r="5" fill="#4ade80"><animate attributeName="r" values="4;8;4" dur="1.6s" repeatCount="indefinite"/><animate attributeName="opacity" values="1;.45;1" dur="1.6s" repeatCount="indefinite"/></circle>
+    <circle cx="945" cy="177" r="5" fill="#4ade80"><animate attributeName="r" values="4;8;4" dur="2s" repeatCount="indefinite"/></circle>
+    <circle cx="1040" cy="187" r="4" fill="#fbbf24"><animate attributeName="opacity" values="1;.25;1" dur="1.3s" repeatCount="indefinite"/></circle>
+  </g>
+  <circle cx="990" cy="150" r="112" stroke="#38bdf8" stroke-opacity=".45" stroke-width="1.5" fill="none"/>
+  <text x="990" y="281" fill="#7dd3fc" font-family="Segoe UI,Arial,sans-serif" font-size="11" letter-spacing="3" text-anchor="middle">LIVE INTELLIGENCE</text>
+</svg>
